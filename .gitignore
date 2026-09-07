@@ -1,0 +1,76 @@
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+!.env.local.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.local.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.egg-info/
+build/
+dist/
+
+# Node.js / Next.js
+node_modules/
+.npm-cache/
+.next/
+out/
+.turbo/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+
+# Runtime data (keep directories through .gitkeep files when present)
+backend/data/chroma/*
+!backend/data/chroma/.gitkeep
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep
+backend/data/documents.db
+backend/data/documents.db-*
+backend/data/*.sqlite
+backend/data/*.sqlite-*
+backend/data/*.sqlite3
+backend/data/*.sqlite3-*
+
+# User course materials. Only the deliberately small SAMPLE files are versioned.
+backend/knowledge/machine_learning/*
+!backend/knowledge/machine_learning/SAMPLE_机器学习基础.md
+backend/knowledge/advanced_mathematics/*
+!backend/knowledge/advanced_mathematics/SAMPLE_高等数学基础.md
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local Docker overrides and temporary artifacts
+compose.override.yaml
+docker-compose.override.yml
+tmp/
+temp/
+*.log

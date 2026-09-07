@@ -1,0 +1,146 @@
+from __future__ import annotations
+
+from collections import OrderedDict
+
+from fastapi import APIRouter, Header, Request
+
+from app.api.students import learning_repository_from_request
+from app.core.types import Course
+from app.schemas.curriculum import (
+    CurriculumResponse,
+    CurriculumStageResponse,
+    DimensionStateResponse,
+    PrerequisiteResponse,
+    TopicDetailResponse,
+    TopicSummaryResponse,
+)
+from app.services.learning_repository import LearningRepository
+
+
+router = APIRouter(prefix="/api/v1/curriculum", tags=["curriculum"])
+
+
+def _mastery_display(value: float | None) -> str | None:
+    return None if value is None else f"{round(value * 100)}%"
+
+
+def _student_view(
+    repository: LearningRepository,
+    topic: dict,
+    student_id: str | None,
+) -> dict:
+    if student_id is None:
+        return {
+            "status": None,
+            "mastery": None,
+            "mastery_display": None,
+            "confidence": None,
+            "locked_reason": None,
+        }
+
+    unmet = repository.get_unmet_prerequisites(student_id, topic["id"])
+    stored_status = topic.get("state_status")
+    status = stored_status or "not_started"
+    if status == "locked":
+        status = "not_started"
+    started = stored_status not in (None, "locked", "not_started")
+    mastery = topic.get("state_mastery") if started else None
+    confidence = topic.get("state_confidence") if started else None
+    locked_reason = None
+    if unmet:
+        locked_reason = "尚需掌握：" + "、".join(item["title"] for item in unmet)
+    return {
+        "status": status,
+        "mastery": mastery,
+        "mastery_display": _mastery_display(mastery),
+        "confidence": confidence,
+        "locked_reason": locked_reason,
+    }
+
+
+def _summary(
+    repository: LearningRepository,
+    topic: dict,
+    student_id: str | None,
+) -> TopicSummaryResponse:
+    return TopicSummaryResponse(
+        id=topic["id"],
+        slug=topic["slug"],
+        title=topic["title"],
+        order_index=topic["order_index"],
+        description=topic["description"],
+        prerequisites=[PrerequisiteResponse.model_validate(item) for item in topic["prerequisites"]],
+        **_student_view(repository, topic, student_id),
+    )
+
+
+@router.get("/topics", response_model=CurriculumResponse)
+def list_topics(
+    request: Request,
+    course: Course,
+    x_student_id: str | None = Header(default=None, alias="X-Student-ID"),
+) -> CurriculumResponse:
+    repository = learning_repository_from_request(request)
+    if x_student_id is not None:
+        repository.require_student(x_student_id, touch=True)
+    topics = repository.list_topics(course, student_id=x_student_id)
+    grouped: OrderedDict[int, CurriculumStageResponse] = OrderedDict()
+    for topic in topics:
+        stage = grouped.setdefault(
+            topic["stage"],
+            CurriculumStageResponse(
+                stage=topic["stage"], title=topic["stage_title"], topics=[]
+            ),
+        )
+        stage.topics.append(_summary(repository, topic, x_student_id))
+    return CurriculumResponse(course=course, stages=list(grouped.values()))
+
+
+@router.get("/topics/{topic_id}", response_model=TopicDetailResponse)
+def topic_detail(
+    topic_id: str,
+    request: Request,
+    x_student_id: str | None = Header(default=None, alias="X-Student-ID"),
+) -> TopicDetailResponse:
+    repository = learning_repository_from_request(request)
+    if x_student_id is not None:
+        repository.require_student(x_student_id, touch=True)
+    topic = repository.require_topic(topic_id, student_id=x_student_id)
+    state_by_dimension = {
+        state["dimension"]: state
+        for state in (
+            repository.list_dimension_states(x_student_id, topic_id)
+            if x_student_id is not None
+            else []
+        )
+    }
+    dimensions = []
+    for name in topic["required_dimensions"]:
+        state = state_by_dimension.get(name)
+        started = bool(state and state["evidence_count"] > 0)
+        mastery = state["mastery"] if started else None
+        dimensions.append(
+            DimensionStateResponse(
+                dimension=name,
+                mastery=mastery,
+                mastery_display=_mastery_display(mastery),
+                confidence=state["confidence"] if started else None,
+                evidence_count=state["evidence_count"] if state else 0,
+            )
+        )
+    summary = _summary(repository, topic, x_student_id)
+    return TopicDetailResponse(
+        **summary.model_dump(),
+        course=topic["course"],
+        stage=topic["stage"],
+        stage_title=topic["stage_title"],
+        learning_objectives=topic["learning_objectives"],
+        aliases=topic["aliases"],
+        retrieval_keywords=topic["retrieval_keywords"],
+        difficulty=topic["difficulty"],
+        required_dimensions=topic["required_dimensions"],
+        dimensions=dimensions,
+        active=topic["active"],
+        created_at=topic["created_at"],
+        updated_at=topic["updated_at"],
+    )
