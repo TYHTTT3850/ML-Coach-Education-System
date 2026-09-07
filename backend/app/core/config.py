@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     """All environment-backed application configuration in one place."""
 
     model_config = SettingsConfigDict(
-        env_file=BACKEND_ROOT / ".env",
+        env_file=BACKEND_ROOT / ".env.loacl",
         env_file_encoding="utf-8",
         env_ignore_empty=True,
         case_sensitive=False,
