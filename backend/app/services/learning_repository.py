@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 import math
-import sqlite3
 import uuid
 from collections.abc import Sequence
 from contextlib import nullcontext
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
+
+import psycopg
 
 from app.core.exceptions import (
     CourseTopicMismatchError,
@@ -21,8 +21,7 @@ from app.core.exceptions import (
 from app.core.types import Course
 from app.curriculum.models import CurriculumSeed
 from app.curriculum.validation import CrossCourseDependencyError
-from app.db.database import SQLiteDatabase
-from app.db.migrations import migrate_database
+from app.db.database import PostgresConnection, PostgresDatabase
 from app.schemas.learning import EvaluationResultInternal
 from app.schemas.practice import PracticeQuestionInternal, PracticeSetInternal
 
@@ -53,17 +52,14 @@ class LearningRepository:
         {"alpha", "beta", "mastery", "confidence", "evidence_count"}
     )
 
-    def __init__(self, path: str | Path | SQLiteDatabase) -> None:
-        self.database = path if isinstance(path, SQLiteDatabase) else SQLiteDatabase(path)
+    def __init__(self, database_url: str | PostgresDatabase) -> None:
+        self.database = (
+            database_url
+            if isinstance(database_url, PostgresDatabase)
+            else PostgresDatabase(database_url)
+        )
 
-    @property
-    def path(self) -> Path:
-        return self.database.path
-
-    def initialize(self) -> list[int]:
-        return migrate_database(self.path)
-
-    def _connect(self) -> sqlite3.Connection:
+    def _connect(self) -> PostgresConnection:
         """Return the shared configured connection for integrated Phase 2 services."""
 
         return self.database.connect()
@@ -73,7 +69,7 @@ class LearningRepository:
         return datetime.now(timezone.utc).isoformat()
 
     @staticmethod
-    def _row(row: sqlite3.Row | None) -> dict[str, Any] | None:
+    def _row(row: dict[str, Any] | None) -> dict[str, Any] | None:
         return dict(row) if row is not None else None
 
     def create_anonymous_student(self) -> dict[str, Any]:
@@ -222,7 +218,7 @@ class LearningRepository:
     def _load_json(value: str | None, fallback: Any) -> Any:
         return json.loads(value) if value else fallback
 
-    def _topic_record(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _topic_record(self, row: dict[str, Any]) -> dict[str, Any]:
         record = dict(row)
         for column, output in (
             ("learning_objectives_json", "learning_objectives"),
@@ -563,7 +559,7 @@ class LearningRepository:
         practice_set: PracticeSetInternal,
         requested_difficulty: str = "adaptive",
         target_misconception_tags: Sequence[str] | None = None,
-        _connection: sqlite3.Connection | None = None,
+        _connection: PostgresConnection | None = None,
     ) -> str:
         """Persist the immutable grading snapshot and all questions atomically."""
 
@@ -640,7 +636,7 @@ class LearningRepository:
         return practice_set.practice_set_id
 
     @staticmethod
-    def _practice_question_from_row(row: sqlite3.Row) -> PracticeQuestionInternal:
+    def _practice_question_from_row(row: dict[str, Any]) -> PracticeQuestionInternal:
         return PracticeQuestionInternal.model_validate(
             {
                 "question_id": row["id"],
@@ -803,7 +799,7 @@ class LearningRepository:
                         now,
                     ),
                 )
-        except sqlite3.IntegrityError as exc:
+        except psycopg.IntegrityError as exc:
             raise DuplicateSubmissionError() from exc
         return submission_id
 
@@ -1175,7 +1171,7 @@ class LearningRepository:
                   AND ps.mode = 'checkpoint'
                   AND s.evaluation_status = 'evaluated'
                   AND (ps.purpose='legacy' OR NOT EXISTS (SELECT 1 FROM practice_questions pq WHERE pq.practice_set_id=ps.id AND (pq.evidence_eligible=0 OR pq.used_hint=1 OR pq.solution_revealed=1 OR pq.attempt_count>1)))
-                ORDER BY s.created_at DESC, s.rowid DESC
+                ORDER BY s.created_at DESC, s.id DESC
                 LIMIT 1
                 """,
                 (student_id, topic_id),
@@ -1239,7 +1235,7 @@ class LearningRepository:
         return session_id
 
     @staticmethod
-    def _submission_history_record(row: sqlite3.Row) -> dict[str, Any]:
+    def _submission_history_record(row: dict[str, Any]) -> dict[str, Any]:
         score = float(row["total_score"])
         return {
             "event_type": "submission",
@@ -1290,7 +1286,7 @@ class LearningRepository:
             course_value = course.value if isinstance(course, Course) else Course(course).value
             query += " AND ps.course = ?"
             params.append(course_value)
-        query += " ORDER BY s.created_at DESC, s.rowid DESC LIMIT ?"
+        query += " ORDER BY s.created_at DESC, s.id DESC LIMIT ?"
         params.append(normalized_limit)
         with self._connect() as connection:
             rows = connection.execute(query, tuple(params)).fetchall()
@@ -1321,7 +1317,7 @@ class LearningRepository:
                 JOIN curriculum_topics t ON t.id = ps.topic_id
                 WHERE s.student_id = ? AND ps.course = ?
                   AND s.evaluation_status <> 'processing'
-                ORDER BY s.created_at DESC, s.rowid DESC
+                ORDER BY s.created_at DESC, s.id DESC
                 LIMIT ?
                 """,
                 (student_id, course_value, normalized_limit),
@@ -1333,7 +1329,7 @@ class LearningRepository:
                 FROM learning_sessions ls
                 LEFT JOIN curriculum_topics t ON t.id = ls.topic_id
                 WHERE ls.student_id = ? AND ls.course = ?
-                ORDER BY ls.created_at DESC, ls.rowid DESC
+                ORDER BY ls.created_at DESC, ls.id DESC
                 LIMIT ?
                 """,
                 (student_id, course_value, normalized_limit),

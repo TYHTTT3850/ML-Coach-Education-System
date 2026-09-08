@@ -50,9 +50,9 @@ def create_app(
             app_settings.embedding_api_key.get_secret_value(),
         ),
     )
-    app_registry = registry or DocumentRegistry(app_settings.sqlite_path)
+    app_registry = registry or DocumentRegistry(app_settings.database_url)
     app_learning_repository = learning_repository or LearningRepository(
-        app_settings.sqlite_path
+        app_settings.database_url
     )
     app_vector_store = vector_store or ChromaVectorStore(
         app_settings.chroma_path,
@@ -62,11 +62,9 @@ def create_app(
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         app_settings.ensure_data_directories()
-        app_registry.initialize()
-        app_learning_repository.initialize()
         # The bundled curriculum is configuration data.  Its upsert is
-        # intentionally idempotent so every process starts with a complete DAG
-        # without deleting documents or student progress.
+        # intentionally idempotent; database schema must be initialized first
+        # with operations/database/migrate.py.
         seed_curriculum(app_learning_repository)
         if not getattr(app_vector_store, "ready", False):
             try:

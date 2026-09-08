@@ -29,7 +29,7 @@ def _can_checkpoint(request: Request, student_id: str | None, topic: dict) -> bo
 @router.get("/courses")
 def registered_courses(request: Request):
     with request.app.state.learning_repository._connect() as connection:
-        return {"courses": [dict(row) for row in connection.execute("SELECT * FROM courses WHERE active=1 ORDER BY rowid")]}
+        return {"courses": [dict(row) for row in connection.execute("SELECT * FROM courses WHERE active=1 ORDER BY id")]}
 
 
 @router.get("/courses/{course}/outline")

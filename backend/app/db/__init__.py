@@ -1,11 +1,8 @@
-"""Shared SQLite connection and schema migration helpers."""
+"""Shared PostgreSQL connection helpers for runtime repositories."""
 
-from app.db.database import SQLiteDatabase, connect_sqlite
-from app.db.migrations import LATEST_SCHEMA_VERSION, migrate_database
+from app.db.database import PostgresDatabase, connect_postgres
 
 __all__ = [
-    "LATEST_SCHEMA_VERSION",
-    "SQLiteDatabase",
-    "connect_sqlite",
-    "migrate_database",
+    "PostgresDatabase",
+    "connect_postgres",
 ]

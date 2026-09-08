@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import sqlite3
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
+
+import psycopg
 
 from app.core.exceptions import DuplicateDocumentError
 from app.core.types import Course
-from app.db.database import connect_sqlite
+from app.db.database import PostgresConnection, connect_postgres
 
 
 DOCUMENT_COLUMNS = (
@@ -18,47 +18,20 @@ DOCUMENT_COLUMNS = (
 
 
 class DocumentRegistry:
-    """Small SQLite registry; every method owns a short-lived connection."""
+    """Small PostgreSQL registry; every method owns a short-lived connection."""
 
-    def __init__(self, path: Path) -> None:
-        self.path = Path(path)
+    def __init__(self, database_url: str) -> None:
+        self.database_url = database_url
 
-    def initialize(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
-            connection.executescript(
-                """
-                PRAGMA journal_mode=WAL;
-                CREATE TABLE IF NOT EXISTS documents (
-                    id TEXT PRIMARY KEY,
-                    course TEXT NOT NULL,
-                    original_filename TEXT NOT NULL,
-                    stored_filename TEXT NOT NULL,
-                    sha256 TEXT NOT NULL,
-                    file_size INTEGER NOT NULL,
-                    chunk_count INTEGER NOT NULL DEFAULT 0,
-                    status TEXT NOT NULL,
-                    error_message TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    UNIQUE(course, sha256)
-                );
-                CREATE INDEX IF NOT EXISTS idx_documents_course
-                    ON documents(course);
-                CREATE INDEX IF NOT EXISTS idx_documents_updated_at
-                    ON documents(updated_at);
-                """
-            )
-
-    def _connect(self) -> sqlite3.Connection:
-        return connect_sqlite(self.path)
+    def _connect(self) -> PostgresConnection:
+        return connect_postgres(self.database_url)
 
     @staticmethod
     def _now() -> str:
         return datetime.now(timezone.utc).isoformat()
 
     @staticmethod
-    def _row(row: sqlite3.Row | None) -> dict[str, Any] | None:
+    def _row(row: dict[str, Any] | None) -> dict[str, Any] | None:
         return dict(row) if row is not None else None
 
     def find_duplicate(self, course: Course, sha256: str) -> dict[str, Any] | None:
@@ -102,7 +75,7 @@ class DocumentRegistry:
                         now,
                     ),
                 )
-        except sqlite3.IntegrityError as exc:
+        except psycopg.IntegrityError as exc:
             raise DuplicateDocumentError(internal_message=str(exc)) from exc
         created = self.get_document(document_id)
         assert created is not None

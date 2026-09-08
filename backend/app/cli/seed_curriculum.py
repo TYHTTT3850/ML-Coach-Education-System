@@ -12,7 +12,7 @@ from app.services.learning_repository import LearningRepository
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="导入 Course Coach 默认课程知识点")
-    parser.add_argument("--database", type=Path, help="覆盖配置中的 SQLite 路径")
+    parser.add_argument("--database-url", help="覆盖配置中的 PostgreSQL DATABASE_URL")
     parser.add_argument(
         "--seed",
         action="append",
@@ -24,10 +24,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    path = args.database or Settings().sqlite_path
-    repository = LearningRepository(path)
+    repository = LearningRepository(args.database_url or Settings().database_url)
     try:
-        repository.initialize()
         counts = seed_curriculum(repository, args.seed or DEFAULT_SEED_PATHS)
         if not args.seed:
             counts = {course.value: len(repository.list_topics(course)) for course in Course}

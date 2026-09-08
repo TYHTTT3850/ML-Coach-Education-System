@@ -56,8 +56,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         settings.ensure_data_directories()
-        registry = DocumentRegistry(settings.sqlite_path)
-        registry.initialize()
+        registry = DocumentRegistry(settings.database_url)
         vector_store = ChromaVectorStore(settings.chroma_path, settings.chroma_distance_metric)
         vector_store.initialize()
         embedding_client = create_embedding_client(settings)

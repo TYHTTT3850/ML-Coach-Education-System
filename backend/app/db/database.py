@@ -1,37 +1,64 @@
 from __future__ import annotations
 
-import sqlite3
-from pathlib import Path
+from collections.abc import Sequence
+from typing import Any
+
+import psycopg
+from psycopg.rows import dict_row
 
 
-class SQLiteConnection(sqlite3.Connection):
-    """Transaction context manager that also releases the file handle on exit."""
+class PostgresConnection:
+    """Small compatibility wrapper around a PostgreSQL connection."""
 
-    def __exit__(self, exc_type, exc_value, traceback) -> bool:
+    def __init__(self, connection: psycopg.Connection[dict[str, Any]]) -> None:
+        self._connection = connection
+
+    def __enter__(self) -> "PostgresConnection":
+        return self
+
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> bool:
         try:
-            return bool(super().__exit__(exc_type, exc_value, traceback))
+            if exc_type is None:
+                self._connection.commit()
+            else:
+                self._connection.rollback()
         finally:
-            self.close()
+            self._connection.close()
+        return False
+
+    @staticmethod
+    def _adapt_query(query: str) -> str:
+        return query.replace("?", "%s")
+
+    def execute(
+        self, query: str, params: Sequence[Any] | None = None
+    ) -> Any:
+        return self._connection.execute(self._adapt_query(query), params)
+
+    def executemany(self, query: str, params_seq: Sequence[Sequence[Any]]) -> Any:
+        with self._connection.cursor() as cursor:
+            return cursor.executemany(self._adapt_query(query), params_seq)
+
+    def execute_script(self, script: str) -> None:
+        self._connection.execute(script, prepare=False)
+
+    def commit(self) -> None:
+        self._connection.commit()
+
+    def rollback(self) -> None:
+        self._connection.rollback()
 
 
-def connect_sqlite(path: str | Path) -> sqlite3.Connection:
-    """Open the application's SQLite database with the same safety settings everywhere."""
+class PostgresDatabase:
+    """PostgreSQL connection factory shared by repositories and migrations."""
 
-    connection = sqlite3.connect(Path(path), timeout=15, factory=SQLiteConnection)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    connection.execute("PRAGMA busy_timeout = 15000")
-    return connection
+    def __init__(self, database_url: str) -> None:
+        self.database_url = database_url
+
+    def connect(self) -> PostgresConnection:
+        connection = psycopg.connect(self.database_url, row_factory=dict_row)
+        return PostgresConnection(connection)
 
 
-class SQLiteDatabase:
-    """A lightweight connection factory shared by repositories and migrations."""
-
-    def __init__(self, path: str | Path) -> None:
-        self.path = Path(path)
-
-    def connect(self) -> sqlite3.Connection:
-        return connect_sqlite(self.path)
-
-    def ensure_parent(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+def connect_postgres(database_url: str) -> PostgresConnection:
+    return PostgresDatabase(database_url).connect()

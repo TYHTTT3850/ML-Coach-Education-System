@@ -12,6 +12,9 @@ LLM_MODEL=your-chat-model
 EMBEDDING_BASE_URL=https://your-embedding-provider.example/v1
 EMBEDDING_API_KEY=your-embedding-api-key
 EMBEDDING_MODEL=your-embedding-model
+
+# PostgreSQL 连接串示例
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/ml_coach
 ```
 
 复制 `frontend/.env.example` 为 `frontend/.env.local`，配置：
@@ -21,6 +24,16 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
 
 如果前后端不在同一台机器或端口，需要同步修改后端的 `FRONTEND_ORIGIN` 和前端的 `NEXT_PUBLIC_API_BASE_URL` 。
+
+## 运维初始化
+
+根目录 `operations/` 存放部署、初始化和维护脚本，不会由后端运行时自动执行。首次启动后端前，以及新增数据库迁移后，在项目根目录运行：
+
+```powershell
+.\backend\.venv\Scripts\python.exe .\operations\database\migrate.py
+```
+
+脚本读取 `backend/.env.local` 中的 `DATABASE_URL`，按版本执行 `operations/database/sql/` 内的 PostgreSQL SQL 文件。已应用的版本记录在 PostgreSQL 的 `schema_migrations` 表中，重复执行是安全的。
 
 ## 后端
 
@@ -58,7 +71,7 @@ npm run build
 
 ## 运行数据说明
 
-`backend/data/` 下的 SQLite 数据库、Chroma 索引和上传文件属于运行时数据。删除它们会清除本地学生学习记录、文档索引或上传内容；重新启动后，课程目录会由内置 seed 数据幂等初始化。
+业务数据存储在 `DATABASE_URL` 指向的 PostgreSQL 数据库中；`backend/data/` 下仅保留 Chroma 索引和上传文件。首次部署和后续数据库结构升级须在项目根目录执行 `backend/.venv/Scripts/python.exe operations/database/migrate.py`；应用运行时不会创建或修改表结构。现有 SQLite 数据需要在保留原库备份后使用专用迁移工具导入 PostgreSQL，应用不会自动删除或改写旧库。
 
 # 项目结构
 
@@ -67,9 +80,13 @@ ML-Coach-Education-System/
 ├── README.md                         # 项目说明、安装和启动文档
 ├── AI赋能教育_ML-Coach_Agent方案.md    # 产品方案、系统设计和 Agent 思路
 ├── 机器学习方法/                       # 机器学习课程原始 Markdown 教材
+├── operations/                         # 一次性初始化与运维脚本
+│   └── database/                       # PostgreSQL 迁移工具和版本化 SQL
+│       ├── migrate.py                  # 数据库迁移入口
+│       └── sql/                        # 建表、索引和触发器 SQL
 ├── backend/                          # FastAPI 后端
 │   ├── app/                          # 后端应用源码
-│   ├── data/                         # 运行时数据库、向量库和上传文件
+│   ├── data/                         # Chroma 索引和上传文件
 │   ├── knowledge/                    # 用于构建知识库的课程资料
 │   ├── scripts/                      # 内容审计等辅助脚本
 │   ├── tests/                        # 后端自动化测试
@@ -95,6 +112,7 @@ ML-Coach-Education-System/
 - `机器学习方法/篇/`：按篇组织的课程目录文件。
 - `机器学习方法/chapters/`：具体章节教材，从感知机、决策树、支持向量机到神经网络、预训练语言模型等。
 - `机器学习方法/images/`：教材中引用的图片资源。
+- `operations/`：项目初始化、升级和其他非运行时运维脚本。
 
 ## 后端目录和文件
 
@@ -170,12 +188,16 @@ API 路由层只负责 HTTP 请求、参数接收和响应组织，具体业务�
 
 ### `backend/app/db/`
 
-SQLite 数据库和持久化结构。
+PostgreSQL 运行时连接和持久化结构。
 
-- `database.py`：数据库连接、初始化和基础数据库操作。
-- `migrations.py`：数据库表结构迁移。
-- `content_schema.py`：课程内容相关数据表结构。
-- `content_curriculum.py`：课程内容与课程目录之间的数据库操作。
+- `database.py`：数据库连接和基础数据库操作。
+
+### `operations/database/`
+
+一次性数据库初始化和版本化升级脚本，不会由运行时应用自动调用。请从项目根目录执行迁移命令。
+
+- `migrate.py`：执行 PostgreSQL 迁移。
+- `sql/`：按迁移版本存放 PostgreSQL 建表、索引和触发器 SQL。
 
 ### `backend/app/schemas/`
 
