@@ -324,3 +324,351 @@ Pydantic 请求和响应模型，用于 API 数据校验与序列化。
 - `eslint.config.mjs`：ESLint 配置。
 - `.env.example`：前端环境变量模板。
 - `.env.local`：本机前端环境变量，不应提交真实密钥。
+
+# 数据库表结构
+
+数据库结构由 `operations/database/initialize_postgresql.sql` 定义，当前使用 PostgreSQL，共 22 张业务表。表中的 `*_json` 字段保存结构化 JSON 文本；时间字段当前统一按文本格式保存，由应用层写入 ISO 8601 时间。除特别说明外，`id` 为业务标识，`created_at`、`updated_at` 等字段为记录时间。
+
+### `schema_migrations`：旧版 SQLite 迁移记录
+
+如果在数据库管理工具中看到 `schema_migrations`，它不是当前 PostgreSQL 业务表，也不在 `operations/database/initialize_postgresql.sql` 中。它属于项目早期 SQLite 版本的迁移机制，用于记录已经执行过的迁移版本，通常包含 `version`、`name` 和 `applied_at` 字段。
+
+当前应用使用 PostgreSQL 初始化脚本部署，应用启动时不会读取或更新 `schema_migrations`；当前后端代码也不再提供旧版 SQLite 迁移器。因此，在确认没有旧版应用、旧版迁移脚本或其他外部工具仍连接该数据库后，可以先备份数据库，再执行：
+
+```sql
+DROP TABLE IF EXISTS schema_migrations;
+```
+
+如果仍需兼容旧版 SQLite 数据库或旧版应用，不要删除该表；它对旧迁移器的幂等执行和版本判断是必要的。删除该表不会影响当前 PostgreSQL 初始化脚本中的 22 张业务表，但生产环境操作前应先确认备份可恢复。
+
+## 表清单
+
+### `assessment_blueprints`：测评蓝图
+
+保存生成练习或检查点时使用的组卷蓝图。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键，蓝图标识 |
+| `payload_json` | 蓝图内容，包括组卷规则等 |
+| `created_at` | 创建时间 |
+
+### `content_exposures`：内容曝光记录
+
+记录学生接触课程内容或题目内容的情况，用于分析内容曝光与测评之间的关系。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | PostgreSQL identity 自增主键 |
+| `student_id` | 学生 |
+| `content_id`、`content_version` | 内容标识和版本 |
+| `family_id` | 内容族标识 |
+| `kind` | 内容类型 |
+| `assessment_id` | 关联测评标识，可为空 |
+| `created_at` | 创建时间 |
+
+### `content_review_events`：内容审核事件
+
+记录题库题目版本的审核动作和审核备注。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | PostgreSQL identity 自增主键 |
+| `item_id`、`item_version` | 被审核的题库项及版本 |
+| `action` | 审核动作 |
+| `review_note` | 审核备注 |
+| `created_at` | 创建时间 |
+
+### `courses`：课程
+
+保存系统支持的课程。初始化时内置机器学习、高等数学、线性代数和概率论与统计基础。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键，课程标识 |
+| `title` | 课程名称 |
+| `active` | 是否启用，`0` 或 `1` |
+
+### `curriculum_topics`：课程主题
+
+保存课程知识图谱中的主题、阶段顺序、学习目标和检索信息。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键，主题标识 |
+| `course` | 所属课程，必须是已注册课程 |
+| `slug` | 主题短标识；与 `course` 联合唯一 |
+| `title` | 主题名称 |
+| `stage`、`stage_title` | 所属阶段编号和名称 |
+| `order_index` | 阶段内排序 |
+| `description` | 主题描述 |
+| `learning_objectives_json` | 学习目标列表 |
+| `aliases_json` | 主题别名列表 |
+| `retrieval_keywords_json` | 检索关键词列表 |
+| `difficulty` | 难度：`easy`、`medium`、`hard` |
+| `required_dimensions_json` | 必须掌握的能力维度 |
+| `active` | 是否启用 |
+| `created_at`、`updated_at` | 创建和更新时间 |
+
+### `documents`：知识库文档
+
+保存上传文档的元数据、导入状态和切分结果。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键，文档标识 |
+| `course` | 所属课程 |
+| `original_filename`、`stored_filename` | 原始文件名和存储文件名 |
+| `sha256` | 文件内容哈希；与 `course` 联合唯一 |
+| `file_size` | 文件大小 |
+| `chunk_count` | 切分出的文本块数量 |
+| `status` | 导入状态 |
+| `error_message` | 导入失败信息，可为空 |
+| `created_at`、`updated_at` | 创建和更新时间 |
+
+### `learning_sessions`：学习会话
+
+记录学生进入某门课程或主题的学习会话。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键，会话标识 |
+| `student_id`、`course` | 学生和课程 |
+| `topic_id` | 当前主题，可为空；主题删除时置空 |
+| `state` | 会话状态 |
+| `started_at`、`ended_at` | 开始和结束时间 |
+| `created_at`、`updated_at` | 创建和更新时间 |
+
+### `lessons`：课程正文
+
+保存主题课程内容的版本化正文。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id`、`version` | 内容标识和版本，联合主键 |
+| `topic_id` | 所属主题 |
+| `status` | `draft`、`published` 或 `archived` |
+| `payload_json` | 课程正文及其结构化内容 |
+| `created_at` | 创建时间 |
+
+### `misconception_events`：误解事件
+
+记录学生在作答中暴露的误解，以及后续是否解决。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键，事件标识 |
+| `student_id`、`topic_id`、`attempt_id` | 学生、主题和对应作答 |
+| `tag` | 误解标签 |
+| `critical` | 是否为关键误解 |
+| `evidence` | 误解证据 |
+| `created_at`、`resolved_at` | 发现和解决时间 |
+
+### `practice_attempts`：单题作答记录
+
+保存一次提交中每道题的答案、评分、反馈和评价可靠性。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键，作答记录标识 |
+| `submission_id`、`question_id`、`student_id` | 所属提交、题目和学生 |
+| `answer_text` | 学生答案 |
+| `score`、`verdict` | 得分和评价结论 |
+| `dimension_scores_json` | 各能力维度得分 |
+| `correct_points_json`、`missing_points_json` | 已掌握和缺失要点 |
+| `misconception_tags_json` | 误解标签 |
+| `critical_misconception` | 是否存在关键误解 |
+| `feedback`、`reference_answer` | 反馈和参考答案 |
+| `evidence_source_ids_json` | 评价引用的知识来源 |
+| `evaluator_confidence` | 评价器置信度 |
+| `evaluation_reliable` | 评价是否可靠 |
+| `created_at` | 创建时间 |
+| 唯一约束 | `(submission_id, question_id)`，同一提交中一道题只能有一条记录 |
+
+### `practice_questions`：练习题
+
+保存练习集中的题目、答案规则、来源和作答辅助状态。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键，题目标识 |
+| `practice_set_id`、`position` | 所属练习集和题目序号；二者联合唯一 |
+| `question_type`、`difficulty` | 题型和难度 |
+| `question`、`options_json` | 题干和选项 |
+| `dimensions_json`、`competencies_json` | 能力维度和能力项 |
+| `answer_key_json`、`rubric_json` | 答案和评分规则 |
+| `source_ids_json` | 知识来源标识 |
+| `question_hash` | 题目内容哈希 |
+| `created_at` | 创建时间 |
+| `bank_item_id`、`item_version`、`family_id` | 题库项、版本和题族信息 |
+| `topic_ids_json` | 关联主题列表 |
+| `solution_steps_json` | 解题步骤 |
+| `used_hint`、`solution_revealed` | 是否使用提示、是否展示解答 |
+| `evidence_eligible` | 是否可作为掌握度证据 |
+| `attempt_count` | 作答次数 |
+
+### `practice_sets`：练习集
+
+保存一次练习或检查点的组卷请求、来源快照和提交状态。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键，练习集标识 |
+| `student_id`、`topic_id` | 学生和目标主题 |
+| `course` | 所属课程 |
+| `mode` | `practice` 或 `checkpoint` |
+| `status` | `generated`、`submitted` 或 `evaluation_uncertain` |
+| `requested_difficulty` | `adaptive`、`easy`、`medium` 或 `hard` |
+| `source_snapshot_json` | 生成时使用的知识来源快照 |
+| `target_misconception_tags_json` | 目标误解标签 |
+| `created_at`、`submitted_at` | 创建和提交时间 |
+| `blueprint_id` | 使用的测评蓝图，可为空 |
+| `purpose` | 练习目的，默认 `legacy` |
+| `prerequisite_for` | 用于验收哪个主题，可为空 |
+| `rule_version` | 组卷规则版本 |
+| `required_dimensions_snapshot_json` | 生成时要求的能力维度快照 |
+
+### `practice_submissions`：练习提交
+
+保存学生提交整套练习后的汇总评分、评价状态和掌握度变化。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键，提交标识 |
+| `practice_set_id`、`student_id` | 所属练习集和学生 |
+| `client_submission_id` | 客户端提交幂等标识，唯一 |
+| `total_score` | 总分，范围 `0` 到 `100` |
+| `evaluation_status` | `processing`、`evaluated` 或 `evaluation_uncertain` |
+| `mastery_before`、`mastery_after` | 评价前后的掌握度 |
+| `gate_result_json` | 前置门禁结果 |
+| `response_json` | 原始或结构化响应 |
+| `created_at` | 创建时间 |
+
+### `prerequisite_verifications`：前置能力验证
+
+保存学生通过练习集验证某个依赖主题能力的记录。
+
+| 字段 | 说明 |
+| --- | --- |
+| `student_id`、`dependent_topic_id`、`prerequisite_topic_id` | 学生、依赖主题和前置主题 |
+| `competency` | 已验证的能力项 |
+| `rule_version` | 验证规则版本 |
+| `assessment_id` | 用于验证的练习集 |
+| `verified_at` | 验证时间 |
+| 主键 | 学生、依赖主题、前置主题、能力项和规则版本的联合主键 |
+
+### `question_bank_items`：题库题目
+
+保存经过内容审核和版本管理的题库题目。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id`、`version` | 题库项标识和版本，联合主键 |
+| `primary_course` | 主课程 |
+| `question_type`、`difficulty` | 题型和难度 |
+| `family_id` | 题族标识 |
+| `publication_status` | 发布状态 |
+| `validation_status` | 校验状态 |
+| `payload_json` | 题目完整内容 |
+| `created_at`、`updated_at` | 创建和更新时间 |
+
+### `question_bank_topics`：题库题目主题关联
+
+建立题库题目版本与课程主题之间的多对多关系。
+
+| 字段 | 说明 |
+| --- | --- |
+| `item_id`、`item_version` | 题库项及版本，外键关联 `question_bank_items` |
+| `topic_id` | 关联主题 |
+| 主键 | `item_id`、`item_version`、`topic_id` 的联合主键 |
+
+### `student_dimension_states`：学生能力维度状态
+
+记录学生在主题下各项能力维度上的细粒度掌握情况。
+
+| 字段 | 说明 |
+| --- | --- |
+| `student_id`、`topic_id`、`dimension` | 学生、主题和能力维度，联合主键 |
+| `alpha`、`beta`、`mastery`、`confidence` | 概率模型参数、掌握度和置信度 |
+| `evidence_count` | 证据数量 |
+| `updated_at` | 更新时间 |
+
+### `student_topic_states`：学生主题掌握状态
+
+记录学生在每个主题上的掌握度、证据数量、练习次数和学习状态。
+
+| 字段 | 说明 |
+| --- | --- |
+| `student_id`、`topic_id` | 学生和主题，联合主键 |
+| `alpha`、`beta` | 掌握度概率模型参数 |
+| `mastery`、`confidence` | 掌握度和置信度，范围均为 `0` 到 `1` |
+| `evidence_count` | 有效证据数量 |
+| `attempt_count` | 作答次数 |
+| `practice_set_count`、`checkpoint_count` | 练习集和检查点数量 |
+| `latest_score`、`best_score`、`latest_checkpoint_score` | 最近、最高和最近检查点评分 |
+| `status` | `locked`、`not_started`、`learning`、`practicing`、`needs_remediation`、`ready_for_checkpoint` 或 `mastered` |
+| `started_at`、`last_practiced_at`、`mastered_at`、`updated_at` | 学习生命周期时间 |
+
+该表通过 `(student_id, topic_id)` 外键关联 `student_topic_states`，主题状态删除时级联删除。
+
+### `students`：学生
+
+保存匿名学生身份和活跃时间。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键，学生标识 |
+| `created_at` | 创建时间 |
+| `last_active_at` | 最近活跃时间 |
+
+### `topic_placements`：主题课程编排
+
+保存主题在课程目录分组中的展示位置，支持同一主题作为参考内容出现在多个位置。
+
+| 字段 | 说明 |
+| --- | --- |
+| `course_id`、`topic_id` | 课程和主题，联合主键 |
+| `parent_group_id`、`group_title` | 所属目录分组及名称 |
+| `order_index` | 分组内排序 |
+| `is_reference` | 是否为参考位置 |
+
+### `topic_prerequisites`：主题前置关系
+
+描述主题之间的前置、推荐或关联关系，并记录前置掌握要求。
+
+| 字段 | 说明 |
+| --- | --- |
+| `topic_id` | 当前主题，级联删除 |
+| `prerequisite_topic_id` | 前置主题，禁止被引用时删除 |
+| `required_mastery` | 要求的掌握度，范围 `0` 到 `1` |
+| `relation_type` | `required`、`recommended` 或 `related` |
+| `reason` | 建立该关系的原因 |
+| `required_competencies_json` | 所需能力维度 |
+| `scope`、`section_id` | 关系作用范围及章节区段 |
+| `rule_version` | 规则版本 |
+| 主键 | `topic_id`、`prerequisite_topic_id`、`relation_type`、`scope`、`section_id` 的联合主键 |
+
+### `worked_examples`：例题
+
+保存主题下可复用的版本化例题。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id`、`version` | 例题标识和版本，联合主键 |
+| `topic_id` | 所属主题 |
+| `family_id` | 例题族标识 |
+| `status` | `draft`、`published` 或 `archived` |
+| `payload_json` | 例题、解答和元数据 |
+| `created_at` | 创建时间 |
+
+## 数据关系和完整性规则
+
+- `students` 是学习过程的根实体；学生删除时，其主题状态、练习、提交、作答、误解事件和学习会话会按外键级联删除。
+- `courses`、`curriculum_topics` 和 `topic_prerequisites` 构成课程目录与前置知识图谱。主题不能依赖自身；`required` 类型的前置关系不能形成环。
+- `practice_sets` -> `practice_questions`、`practice_submissions` -> `practice_attempts` 形成练习、提交和单题评价链路。删除练习集会级联删除题目和提交，删除提交会级联删除作答记录。
+- `lessons`、`worked_examples` 和 `question_bank_items` 使用 `(id, version)` 联合主键保存可追溯的内容版本；题库题目与主题通过 `question_bank_topics` 关联。
+- 新增或更新 `curriculum_topics` 时，触发器会检查课程是否存在且处于启用状态；新增或更新必需前置关系时，触发器会阻止依赖环。
+
+## 主要索引
+
+初始化脚本为课程主题排序、前置主题查询、学生掌握状态、练习集与提交历史、误解事件、学习会话、题库筛选、内容曝光和文档课程/更新时间建立索引，以支持课程导航、学习仪表盘、练习评价和知识库管理等查询。
