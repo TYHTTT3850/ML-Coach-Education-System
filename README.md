@@ -329,18 +329,6 @@ Pydantic 请求和响应模型，用于 API 数据校验与序列化。
 
 数据库结构由 `operations/database/initialize_postgresql.sql` 定义，当前使用 PostgreSQL，共 22 张业务表。表中的 `*_json` 字段保存结构化 JSON 文本；时间字段当前统一按文本格式保存，由应用层写入 ISO 8601 时间。除特别说明外，`id` 为业务标识，`created_at`、`updated_at` 等字段为记录时间。
 
-### `schema_migrations`：旧版 SQLite 迁移记录
-
-如果在数据库管理工具中看到 `schema_migrations`，它不是当前 PostgreSQL 业务表，也不在 `operations/database/initialize_postgresql.sql` 中。它属于项目早期 SQLite 版本的迁移机制，用于记录已经执行过的迁移版本，通常包含 `version`、`name` 和 `applied_at` 字段。
-
-当前应用使用 PostgreSQL 初始化脚本部署，应用启动时不会读取或更新 `schema_migrations`；当前后端代码也不再提供旧版 SQLite 迁移器。因此，在确认没有旧版应用、旧版迁移脚本或其他外部工具仍连接该数据库后，可以先备份数据库，再执行：
-
-```sql
-DROP TABLE IF EXISTS schema_migrations;
-```
-
-如果仍需兼容旧版 SQLite 数据库或旧版应用，不要删除该表；它对旧迁移器的幂等执行和版本判断是必要的。删除该表不会影响当前 PostgreSQL 初始化脚本中的 22 张业务表，但生产环境操作前应先确认备份可恢复。
-
 ## 表清单
 
 ### `assessment_blueprints`：测评蓝图
