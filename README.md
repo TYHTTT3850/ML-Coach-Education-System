@@ -27,13 +27,13 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 ## 运维初始化
 
-根目录 `operations/` 存放部署、初始化和维护脚本，不会由后端运行时自动执行。首次启动后端前，以及新增数据库迁移后，在项目根目录运行：
+根目录 `operations/` 存放部署、初始化和维护脚本，不会由后端运行时自动执行。首次启动后端前，在项目根目录运行：
 
 ```powershell
-.\backend\.venv\Scripts\python.exe .\operations\database\migrate.py
+.\backend\.venv\Scripts\python.exe .\operations\database\initialize.py
 ```
 
-脚本读取 `backend/.env.local` 中的 `DATABASE_URL`，按版本执行 `operations/database/sql/` 内的 PostgreSQL SQL 文件。已应用的版本记录在 PostgreSQL 的 `schema_migrations` 表中，重复执行是安全的。
+脚本读取 `backend/.env.local` 中的 `DATABASE_URL`，执行 `operations/database/initialize_postgresql.sql` 创建当前全部表、索引、函数和触发器。该脚本面向空数据库；重复执行不会重复创建已有对象，但不会把旧版本数据库升级到当前结构。
 
 ## 后端
 
@@ -71,7 +71,7 @@ npm run build
 
 ## 运行数据说明
 
-业务数据存储在 `DATABASE_URL` 指向的 PostgreSQL 数据库中；`backend/data/` 下仅保留 Chroma 索引和上传文件。首次部署和后续数据库结构升级须在项目根目录执行 `backend/.venv/Scripts/python.exe operations/database/migrate.py`；应用运行时不会创建或修改表结构。现有 SQLite 数据需要在保留原库备份后使用专用迁移工具导入 PostgreSQL，应用不会自动删除或改写旧库。
+业务数据存储在 `DATABASE_URL` 指向的 PostgreSQL 数据库中；`backend/data/` 下仅保留 Chroma 索引和上传文件。首次部署须在项目根目录执行 `backend/.venv/Scripts/python.exe operations/database/initialize.py`；应用运行时不会创建或修改表结构。现有 SQLite 数据需要在保留原库备份后使用专用工具导入 PostgreSQL，应用不会自动删除或改写旧库。
 
 # 项目结构
 
@@ -81,9 +81,9 @@ ML-Coach-Education-System/
 ├── AI赋能教育_ML-Coach_Agent方案.md    # 产品方案、系统设计和 Agent 思路
 ├── 机器学习方法/                       # 机器学习课程原始 Markdown 教材
 ├── operations/                         # 一次性初始化与运维脚本
-│   └── database/                       # PostgreSQL 迁移工具和版本化 SQL
-│       ├── migrate.py                  # 数据库迁移入口
-│       └── sql/                        # 建表、索引和触发器 SQL
+│   └── database/                       # PostgreSQL 初始化工具
+│       ├── initialize.py               # 数据库初始化入口
+│       └── initialize_postgresql.sql   # 当前完整数据库结构
 ├── backend/                          # FastAPI 后端
 │   ├── app/                          # 后端应用源码
 │   ├── data/                         # Chroma 索引和上传文件
@@ -194,10 +194,10 @@ PostgreSQL 运行时连接和持久化结构。
 
 ### `operations/database/`
 
-一次性数据库初始化和版本化升级脚本，不会由运行时应用自动调用。请从项目根目录执行迁移命令。
+一次性 PostgreSQL 数据库初始化脚本，不会由运行时应用自动调用。请从项目根目录执行初始化命令。
 
-- `migrate.py`：执行 PostgreSQL 迁移。
-- `sql/`：按迁移版本存放 PostgreSQL 建表、索引和触发器 SQL。
+- `initialize.py`：执行 PostgreSQL 初始化。
+- `initialize_postgresql.sql`：当前完整的建表、索引、函数和触发器 SQL。
 
 ### `backend/app/schemas/`
 
@@ -241,7 +241,6 @@ Pydantic 请求和响应模型，用于 API 数据校验与序列化。
 
 - `ingest.py`：导入课程文档并构建知识库。
 - `import_question_bank.py`：导入题库。
-- `migrate.py`：执行数据库迁移。
 - `seed_curriculum.py`：初始化课程目录。
 - `seed_learning_content.py`：初始化课程学习内容。
 - `validate_content.py`：验证课程内容完整性和格式。

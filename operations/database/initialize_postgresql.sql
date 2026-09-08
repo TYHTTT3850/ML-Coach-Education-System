@@ -4,6 +4,19 @@ CREATE TABLE IF NOT EXISTS students (
     last_active_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS courses (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))
+);
+
+INSERT INTO courses(id, title) VALUES
+    ('machine_learning', '机器学习'),
+    ('advanced_mathematics', '高等数学'),
+    ('linear_algebra', '线性代数'),
+    ('probability_statistics', '概率论与统计基础')
+ON CONFLICT (id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS curriculum_topics (
     id TEXT PRIMARY KEY,
     course TEXT NOT NULL CHECK (course IN ('machine_learning', 'advanced_mathematics', 'linear_algebra', 'probability_statistics')),
@@ -60,6 +73,12 @@ CREATE TABLE IF NOT EXISTS student_dimension_states (
     FOREIGN KEY (student_id, topic_id) REFERENCES student_topic_states(student_id, topic_id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS assessment_blueprints (
+    id TEXT PRIMARY KEY,
+    payload_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS practice_sets (
     id TEXT PRIMARY KEY, student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
     topic_id TEXT NOT NULL REFERENCES curriculum_topics(id) ON DELETE RESTRICT,
@@ -67,7 +86,12 @@ CREATE TABLE IF NOT EXISTS practice_sets (
     mode TEXT NOT NULL CHECK (mode IN ('practice', 'checkpoint')),
     status TEXT NOT NULL CHECK (status IN ('generated', 'submitted', 'evaluation_uncertain')),
     requested_difficulty TEXT NOT NULL CHECK (requested_difficulty IN ('adaptive', 'easy', 'medium', 'hard')),
-    source_snapshot_json TEXT NOT NULL, target_misconception_tags_json TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, submitted_at TEXT
+    source_snapshot_json TEXT NOT NULL, target_misconception_tags_json TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, submitted_at TEXT,
+    blueprint_id TEXT REFERENCES assessment_blueprints(id),
+    purpose TEXT NOT NULL DEFAULT 'legacy',
+    prerequisite_for TEXT REFERENCES curriculum_topics(id),
+    rule_version TEXT NOT NULL DEFAULT 'legacy',
+    required_dimensions_snapshot_json TEXT
 );
 
 CREATE TABLE IF NOT EXISTS practice_questions (
@@ -75,7 +99,17 @@ CREATE TABLE IF NOT EXISTS practice_questions (
     position INTEGER NOT NULL CHECK (position > 0), question_type TEXT NOT NULL,
     difficulty TEXT NOT NULL CHECK (difficulty IN ('easy', 'medium', 'hard')), question TEXT NOT NULL, options_json TEXT,
     dimensions_json TEXT NOT NULL, answer_key_json TEXT NOT NULL, rubric_json TEXT NOT NULL, source_ids_json TEXT NOT NULL,
-    question_hash TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE (practice_set_id, position)
+    question_hash TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE (practice_set_id, position),
+    bank_item_id TEXT,
+    item_version INTEGER,
+    family_id TEXT,
+    topic_ids_json TEXT NOT NULL DEFAULT '[]',
+    competencies_json TEXT NOT NULL DEFAULT '[]',
+    solution_steps_json TEXT NOT NULL DEFAULT '[]',
+    used_hint INTEGER NOT NULL DEFAULT 0,
+    solution_revealed INTEGER NOT NULL DEFAULT 0,
+    evidence_eligible INTEGER NOT NULL DEFAULT 1,
+    attempt_count INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS practice_submissions (
@@ -110,6 +144,70 @@ CREATE TABLE IF NOT EXISTS learning_sessions (
     created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS topic_placements (
+    course_id TEXT NOT NULL REFERENCES courses(id), topic_id TEXT NOT NULL REFERENCES curriculum_topics(id),
+    parent_group_id TEXT NOT NULL, group_title TEXT NOT NULL, order_index INTEGER NOT NULL,
+    is_reference INTEGER NOT NULL DEFAULT 0 CHECK (is_reference IN (0, 1)), PRIMARY KEY(course_id, topic_id)
+);
+
+CREATE TABLE IF NOT EXISTS prerequisite_verifications (
+    student_id TEXT NOT NULL REFERENCES students(id), dependent_topic_id TEXT NOT NULL REFERENCES curriculum_topics(id),
+    prerequisite_topic_id TEXT NOT NULL REFERENCES curriculum_topics(id), competency TEXT NOT NULL,
+    rule_version TEXT NOT NULL, assessment_id TEXT NOT NULL REFERENCES practice_sets(id), verified_at TEXT NOT NULL,
+    PRIMARY KEY(student_id, dependent_topic_id, prerequisite_topic_id, competency, rule_version)
+);
+
+CREATE TABLE IF NOT EXISTS lessons (
+    id TEXT NOT NULL, version INTEGER NOT NULL CHECK(version > 0), topic_id TEXT NOT NULL REFERENCES curriculum_topics(id),
+    status TEXT NOT NULL CHECK(status IN ('draft', 'published', 'archived')), payload_json TEXT NOT NULL, created_at TEXT NOT NULL,
+    PRIMARY KEY(id, version)
+);
+
+CREATE TABLE IF NOT EXISTS worked_examples (
+    id TEXT NOT NULL, version INTEGER NOT NULL CHECK(version > 0), topic_id TEXT NOT NULL REFERENCES curriculum_topics(id), family_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('draft', 'published', 'archived')), payload_json TEXT NOT NULL, created_at TEXT NOT NULL,
+    PRIMARY KEY(id, version)
+);
+
+CREATE TABLE IF NOT EXISTS question_bank_items (
+    id TEXT NOT NULL, version INTEGER NOT NULL CHECK(version > 0), primary_course TEXT NOT NULL REFERENCES courses(id),
+    question_type TEXT NOT NULL, difficulty TEXT NOT NULL, family_id TEXT NOT NULL, publication_status TEXT NOT NULL,
+    validation_status TEXT NOT NULL, payload_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+    PRIMARY KEY(id, version)
+);
+
+CREATE TABLE IF NOT EXISTS question_bank_topics (
+    item_id TEXT NOT NULL, item_version INTEGER NOT NULL, topic_id TEXT NOT NULL REFERENCES curriculum_topics(id),
+    PRIMARY KEY(item_id, item_version, topic_id), FOREIGN KEY(item_id, item_version) REFERENCES question_bank_items(id, version)
+);
+
+CREATE TABLE IF NOT EXISTS content_review_events (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, item_id TEXT NOT NULL, item_version INTEGER NOT NULL,
+    action TEXT NOT NULL, review_note TEXT NOT NULL, created_at TEXT NOT NULL,
+    FOREIGN KEY(item_id, item_version) REFERENCES question_bank_items(id, version)
+);
+
+CREATE TABLE IF NOT EXISTS content_exposures (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, student_id TEXT NOT NULL REFERENCES students(id),
+    content_id TEXT NOT NULL, content_version INTEGER NOT NULL, family_id TEXT NOT NULL, kind TEXT NOT NULL,
+    assessment_id TEXT, created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS documents (
+    id TEXT PRIMARY KEY,
+    course TEXT NOT NULL,
+    original_filename TEXT NOT NULL,
+    stored_filename TEXT NOT NULL,
+    sha256 TEXT NOT NULL,
+    file_size INTEGER NOT NULL,
+    chunk_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    error_message TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(course, sha256)
+);
+
 CREATE INDEX IF NOT EXISTS idx_curriculum_topics_course_stage_order ON curriculum_topics(course, active, stage, order_index);
 CREATE INDEX IF NOT EXISTS idx_topic_prerequisites_prerequisite ON topic_prerequisites(prerequisite_topic_id);
 CREATE INDEX IF NOT EXISTS idx_student_topic_states_topic_status ON student_topic_states(topic_id, status);
@@ -122,3 +220,40 @@ CREATE INDEX IF NOT EXISTS idx_practice_submissions_student_created ON practice_
 CREATE INDEX IF NOT EXISTS idx_practice_attempts_student_created ON practice_attempts(student_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_misconception_events_student_topic_unresolved ON misconception_events(student_id, topic_id, resolved_at);
 CREATE INDEX IF NOT EXISTS idx_learning_sessions_student_course_updated ON learning_sessions(student_id, course, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bank_filters ON question_bank_items(primary_course, publication_status, question_type, difficulty);
+CREATE INDEX IF NOT EXISTS idx_exposure_student_family ON content_exposures(student_id, family_id, kind);
+CREATE INDEX IF NOT EXISTS idx_documents_course ON documents(course);
+CREATE INDEX IF NOT EXISTS idx_documents_updated_at ON documents(updated_at);
+
+CREATE OR REPLACE FUNCTION enforce_registered_course() RETURNS trigger AS $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM courses WHERE id = NEW.course AND active = 1) THEN
+        RAISE EXCEPTION 'unregistered_course';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_curriculum_registered_course ON curriculum_topics;
+CREATE TRIGGER trg_curriculum_registered_course BEFORE INSERT OR UPDATE ON curriculum_topics
+FOR EACH ROW EXECUTE FUNCTION enforce_registered_course();
+
+CREATE OR REPLACE FUNCTION prevent_required_prerequisite_cycle() RETURNS trigger AS $$
+BEGIN
+    IF NEW.relation_type = 'required' AND EXISTS (
+        WITH RECURSIVE ancestors(id) AS (
+            SELECT NEW.prerequisite_topic_id
+            UNION
+            SELECT prerequisite_topic_id FROM topic_prerequisites p JOIN ancestors a ON p.topic_id = a.id
+            WHERE p.relation_type = 'required'
+        ) SELECT 1 FROM ancestors WHERE id = NEW.topic_id
+    ) THEN
+        RAISE EXCEPTION 'required_prerequisite_cycle';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_required_cycle ON topic_prerequisites;
+CREATE TRIGGER trg_required_cycle BEFORE INSERT OR UPDATE ON topic_prerequisites
+FOR EACH ROW EXECUTE FUNCTION prevent_required_prerequisite_cycle();

@@ -64,7 +64,7 @@ def create_app(
         app_settings.ensure_data_directories()
         # The bundled curriculum is configuration data.  Its upsert is
         # intentionally idempotent; database schema must be initialized first
-        # with operations/database/migrate.py.
+        # with operations/database/initialize.py.
         seed_curriculum(app_learning_repository)
         if not getattr(app_vector_store, "ready", False):
             try:
