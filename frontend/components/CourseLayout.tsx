@@ -29,6 +29,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
   const { status, withStudent, studentId } = useStudent();
   const [outline, setOutline] = useState<CourseOutline | null>(null);
   const [error, setError] = useState("");
+  const currentOutline = outline?.course === course ? outline : null;
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -37,12 +38,18 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
   const navRef = useRef<HTMLElement>(null);
   const mobileButton = useRef<HTMLButtonElement>(null);
   const previousTopic = useRef("");
+  const outlineRequest = useRef(0);
   const refresh = useCallback(async () => {
     if (!course) return;
+    const requestId = ++outlineRequest.current;
     try {
       const value = await withStudent((id) => getCourseOutline(course, id));
-      setOutline(value); setError("");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "目录加载失败，请重试。"); }
+      if (requestId === outlineRequest.current) {
+        setOutline(value); setError("");
+      }
+    } catch (cause) {
+      if (requestId === outlineRequest.current) setError(cause instanceof Error ? cause.message : "目录加载失败，请重试。");
+    }
   }, [course, withStudent]);
   useEffect(() => {
     if (status !== "ready") return;
@@ -60,9 +67,9 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [course]);
   useEffect(() => {
-    if (!outline || !topicId || previousTopic.current === `${course}:${topicId}`) return;
+    if (!currentOutline || !topicId || previousTopic.current === `${course}:${topicId}`) return;
     previousTopic.current = `${course}:${topicId}`;
-    const group = outline.groups.find((entry) => entry.topics.some((topic) => topic.topic_id === topicId));
+    const group = currentOutline.groups.find((entry) => entry.topics.some((topic) => topic.topic_id === topicId));
     const timer = window.setTimeout(() => {
       setClosedGroups((current) => current.filter((id) => id !== group?.id && id !== group?.parent_group_id));
       setMobileOpen(false);
@@ -72,7 +79,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
       } catch { /* URL is the authoritative current location. */ }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [outline, topicId, course]);
+  }, [currentOutline, topicId, course]);
   useEffect(() => {
     if (!mobileOpen) return;
     const priorOverflow = document.body.style.overflow;
@@ -91,7 +98,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
     if (returnTopic) query.set("return_topic", returnTopic);
     return `${path}?${query}`;
   }, [course, topicId, params.course, searchParams]);
-  const value = useMemo(() => ({ outline, course, refresh, topicHref }), [outline, course, refresh, topicHref]);
+  const value = useMemo(() => ({ outline: currentOutline, course, refresh, topicHref }), [currentOutline, course, refresh, topicHref]);
   if (!course) return <OutlineContext.Provider value={value}>{children}</OutlineContext.Provider>;
   function closeMobile() { setMobileOpen(false); mobileButton.current?.focus(); }
   function navigateKeyboard(event: KeyboardEvent<HTMLElement>) {
@@ -110,7 +117,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
       all[next]?.focus();
     }
   }
-  const groups = outline?.groups ?? [];
+  const groups = currentOutline?.groups ?? [];
   const matches = (topic: OutlineTopic) => `${topic.title} ${topic.description}`.toLowerCase().includes(query.toLowerCase());
   function renderGroup(group: OutlineGroup) {
     const children = groups.filter((item) => item.parent_group_id === group.id);
@@ -132,7 +139,7 @@ export default function CourseLayout({ children }: { children: ReactNode }) {
       </div>}
     </section>;
   }
-  const recommended = groups.flatMap((group) => group.topics).find((topic) => topic.topic_id === outline?.recommended_topic_id);
+  const recommended = groups.flatMap((group) => group.topics).find((topic) => topic.topic_id === currentOutline?.recommended_topic_id);
   return <OutlineContext.Provider value={value}>
     <div className="border-b border-slate-200 bg-white px-4 py-2 lg:hidden"><button ref={mobileButton} type="button" aria-expanded={mobileOpen} aria-controls="course-outline" onClick={() => setMobileOpen(true)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold">☰ 课程目录</button></div>
     <div className="mx-auto flex max-w-[1600px] items-start">

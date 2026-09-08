@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertIcon,
   ArrowLeftIcon,
@@ -74,9 +74,13 @@ export default function CourseDashboardPage() {
   const [curriculum, setCurriculum] = useState<CurriculumResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const loadRequest = useRef(0);
+  const currentDashboard = dashboard?.course === course ? dashboard : null;
+  const currentCurriculum = curriculum?.course === course ? curriculum : null;
 
   const load = useCallback(async () => {
     if (!course) return;
+    const requestId = ++loadRequest.current;
     setLoading(true);
     setError(null);
     try {
@@ -86,12 +90,14 @@ export default function CourseDashboardPage() {
           getCurriculum(course, studentId),
         ]),
       );
-      setDashboard(nextDashboard);
-      setCurriculum(nextCurriculum);
+      if (requestId === loadRequest.current) {
+        setDashboard(nextDashboard);
+        setCurriculum(nextCurriculum);
+      }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "学习进度加载失败，请稍后重试。");
+      if (requestId === loadRequest.current) setError(cause instanceof Error ? cause.message : "学习进度加载失败，请稍后重试。");
     } finally {
-      setLoading(false);
+      if (requestId === loadRequest.current) setLoading(false);
     }
   }, [course, withStudent]);
 
@@ -101,15 +107,15 @@ export default function CourseDashboardPage() {
     return () => window.clearTimeout(timer);
   }, [course, load, studentStatus]);
 
-  const progress = dashboard && dashboard.total_topics > 0
-    ? dashboard.mastered_count / dashboard.total_topics
+  const progress = currentDashboard && currentDashboard.total_topics > 0
+    ? currentDashboard.mastered_count / currentDashboard.total_topics
     : 0;
   const activeStage = useMemo(() => {
-    if (!curriculum) return null;
-    return curriculum.stages.find((stage) =>
+    if (!currentCurriculum) return null;
+    return currentCurriculum.stages.find((stage) =>
       stage.topics.some((topic) => !["locked", "not_started", "mastered"].includes(topic.status)),
-    ) ?? curriculum.stages.find((stage) => stage.topics.some((topic) => topic.status !== "mastered")) ?? null;
-  }, [curriculum]);
+    ) ?? currentCurriculum.stages.find((stage) => stage.topics.some((topic) => topic.status !== "mastered")) ?? null;
+  }, [currentCurriculum]);
 
   if (!course) {
     return (
@@ -122,10 +128,10 @@ export default function CourseDashboardPage() {
   }
 
   const meta = COURSE_META[course];
-  const recommended = dashboard
-    ? curriculum?.stages
+  const recommended = currentDashboard
+    ? currentCurriculum?.stages
         .flatMap((stage) => stage.topics)
-        .find((topic) => topic.id === dashboard.recommended_topic_id) ?? dashboard.current_topic
+        .find((topic) => topic.id === currentDashboard.recommended_topic_id) ?? currentDashboard.current_topic
     : null;
 
   return (
@@ -151,7 +157,7 @@ export default function CourseDashboardPage() {
           </Link>
         </div>
 
-        {loading || studentStatus === "initializing" ? (
+        {loading || studentStatus === "initializing" || !currentDashboard || !currentCurriculum ? (
           <div className="mt-7"><LoadingBlock /></div>
         ) : error ? (
           <div className="mt-7 rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-800" role="alert">
@@ -164,14 +170,14 @@ export default function CourseDashboardPage() {
               <button type="button" onClick={() => void load()} className="rounded-xl bg-white px-3 py-2 text-xs font-semibold shadow-sm">重试</button>
             </div>
           </div>
-        ) : dashboard && curriculum ? (
+        ) : currentDashboard && currentCurriculum ? (
           <>
             <section className="mt-7 grid gap-4 lg:grid-cols-[1.35fr_0.9fr]">
               <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft sm:p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <span className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500"><ChartIcon className="size-4 text-indigo-600" />总体进度</span>
-                    <p className="mt-3 text-3xl font-bold tabular-nums text-slate-950">{dashboard.mastered_count}<span className="ml-1 text-base font-medium text-slate-400">/ {dashboard.total_topics}</span></p>
+                    <p className="mt-3 text-3xl font-bold tabular-nums text-slate-950">{currentDashboard.mastered_count}<span className="ml-1 text-base font-medium text-slate-400">/ {currentDashboard.total_topics}</span></p>
                     <p className="mt-1 text-xs text-slate-500">知识点已通过 Mastery Gate</p>
                   </div>
                   {activeStage && <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold text-indigo-700">当前 · 阶段 {activeStage.stage}</span>}
@@ -179,10 +185,10 @@ export default function CourseDashboardPage() {
                 <div className="mt-6"><MasteryBar value={progress} label="课程完成度" /></div>
                 <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {[
-                    ["已掌握", dashboard.mastered_count, "text-emerald-700 bg-emerald-50"],
-                    ["学习中", dashboard.learning_count, "text-indigo-700 bg-indigo-50"],
-                    ["可开始", dashboard.not_started_count, "text-sky-700 bg-sky-50"],
-                    ["未解锁", dashboard.locked_count, "text-slate-600 bg-slate-100"],
+                    ["已掌握", currentDashboard.mastered_count, "text-emerald-700 bg-emerald-50"],
+                    ["学习中", currentDashboard.learning_count, "text-indigo-700 bg-indigo-50"],
+                    ["可开始", currentDashboard.not_started_count, "text-sky-700 bg-sky-50"],
+                    ["未解锁", currentDashboard.locked_count, "text-slate-600 bg-slate-100"],
                   ].map(([label, value, className]) => (
                     <div key={String(label)} className={`rounded-2xl p-3 ${className}`}>
                       <p className="text-xl font-bold tabular-nums">{value}</p>
@@ -194,11 +200,11 @@ export default function CourseDashboardPage() {
 
               <div className="rounded-3xl border border-indigo-200 bg-gradient-to-br from-indigo-600 to-violet-700 p-5 text-white shadow-soft sm:p-6">
                 <span className="inline-flex items-center gap-2 text-xs font-semibold text-indigo-100"><TargetIcon className="size-4" />推荐下一步</span>
-                <h2 className="mt-4 text-xl font-bold">{recommended?.title ?? nextActionLabel(dashboard.next_action)}</h2>
-                <p className="mt-2 text-sm leading-6 text-indigo-100">{nextActionLabel(dashboard.next_action)}</p>
-                {dashboard.reasons.length > 0 && (
+                <h2 className="mt-4 text-xl font-bold">{recommended?.title ?? nextActionLabel(currentDashboard.next_action)}</h2>
+                <p className="mt-2 text-sm leading-6 text-indigo-100">{nextActionLabel(currentDashboard.next_action)}</p>
+                {currentDashboard.reasons.length > 0 && (
                   <ul className="mt-4 space-y-1.5 text-xs leading-5 text-indigo-100">
-                    {dashboard.reasons.slice(0, 3).map((reason) => <li key={reason} className="flex gap-2"><span aria-hidden="true">·</span><span>{reason}</span></li>)}
+                    {currentDashboard.reasons.slice(0, 3).map((reason) => <li key={reason} className="flex gap-2"><span aria-hidden="true">·</span><span>{reason}</span></li>)}
                   </ul>
                 )}
                 {recommended && recommended.status !== "locked" && (
@@ -218,7 +224,7 @@ export default function CourseDashboardPage() {
                   </div>
                   <span className="text-xs text-slate-400">状态由学习证据自动计算</span>
                 </div>
-                {curriculum.stages.map((stage) => (
+                {currentCurriculum.stages.map((stage) => (
                   <section key={stage.stage} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
@@ -243,14 +249,14 @@ export default function CourseDashboardPage() {
                     <ClockIcon className="size-4 text-indigo-600" />
                     <h2 className="text-sm font-bold text-slate-900">最近成绩</h2>
                   </div>
-                  {dashboard.recent_practice.length === 0 ? (
+                  {currentDashboard.recent_practice.length === 0 ? (
                     <div className="py-8 text-center">
                       <span className="mx-auto grid size-10 place-items-center rounded-2xl bg-slate-100 text-slate-400"><ChartIcon className="size-4" /></span>
                       <p className="mt-3 text-xs leading-5 text-slate-400">完成第一组练习后，成绩会显示在这里。</p>
                     </div>
                   ) : (
                     <div className="mt-4 space-y-3">
-                      {dashboard.recent_practice.slice(0, 6).map((attempt, index) => (
+                      {currentDashboard.recent_practice.slice(0, 6).map((attempt, index) => (
                         <Link key={attempt.id ?? attempt.attempt_id ?? `${attempt.topic_id}-${index}`} href={`/learn/${course}/${encodeURIComponent(attempt.topic_id)}`} className="block rounded-2xl bg-slate-50 p-3 transition hover:bg-indigo-50">
                           <div className="flex items-start justify-between gap-3">
                             <p className="line-clamp-2 text-xs font-semibold leading-5 text-slate-700">{attempt.topic_title}</p>

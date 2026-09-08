@@ -62,8 +62,7 @@ def outline(course: Course, request: Request, x_student_id: str | None = Header(
             "prerequisite_gap":[{"id":edge["id"],"title":edge["title"],"reason":edge["reason"]} for edge in unmet],
             "content_status":"ready" if topic_id in ready else "missing",
             "has_learning_content":coverage.get(topic_id,{}).get("has_learning_content",False),
-            "readiness_reason":"；".join(coverage.get(topic_id,{}).get("readiness_gaps",[])),
-            "can_checkpoint":_can_checkpoint(request,x_student_id,topic)})
+            "readiness_reason":"；".join(coverage.get(topic_id,{}).get("readiness_gaps",[]))})
         if recommended is None and topic_id in ready and status!="mastered" and not unmet:
             recommended = topic_id
     return {"course":course.value,"title":course.display_name,"groups":list(groups.values()),"recommended_topic_id":recommended}
