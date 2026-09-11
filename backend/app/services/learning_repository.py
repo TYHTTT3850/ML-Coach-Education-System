@@ -239,7 +239,7 @@ class LearningRepository:
     ) -> list[dict[str, Any]]:
         course_value = course.value if isinstance(course, Course) else Course(course).value
         params: list[Any] = []
-        state_columns = "NULL AS state_status, NULL AS state_mastery, NULL AS state_confidence"
+        state_columns = "NULL AS state_status, NULL AS state_mastery, NULL AS state_confidence, NULL AS state_evidence_count"
         join = ""
         if student_id is not None:
             params.append(student_id)
@@ -249,7 +249,7 @@ class LearningRepository:
             )
             state_columns = (
                 "sts.status AS state_status, sts.mastery AS state_mastery, "
-                "sts.confidence AS state_confidence"
+                "sts.confidence AS state_confidence, sts.evidence_count AS state_evidence_count"
             )
         params.append(course_value)
         active_clause = "AND t.active = 1" if active_only else ""
@@ -264,10 +264,13 @@ class LearningRepository:
                 """,
                 tuple(params),
             ).fetchall()
+        prerequisites_by_topic = self.list_prerequisites_for_topics(
+            [row["id"] for row in rows]
+        )
         records = []
         for row in rows:
             record = self._topic_record(row)
-            record["prerequisites"] = self.list_prerequisites(record["id"])
+            record["prerequisites"] = prerequisites_by_topic[record["id"]]
             records.append(record)
         return records
 
@@ -313,23 +316,81 @@ class LearningRepository:
         return topic
 
     def list_prerequisites(self, topic_id: str) -> list[dict[str, Any]]:
+        return self.list_prerequisites_for_topics([topic_id])[topic_id]
+
+    def list_prerequisites_for_topics(
+        self, topic_ids: Sequence[str]
+    ) -> dict[str, list[dict[str, Any]]]:
+        result = {topic_id: [] for topic_id in topic_ids}
+        if not topic_ids:
+            return result
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT p.id, p.slug, p.title, p.course, tp.*
+                SELECT p.id, p.slug, p.title, p.course, tp.topic_id, tp.required_mastery,
+                       tp.relation_type, tp.reason, tp.required_competencies_json,
+                       tp.scope, tp.section_id, tp.rule_version
                 FROM topic_prerequisites tp
                 JOIN curriculum_topics p ON p.id = tp.prerequisite_topic_id
-                WHERE tp.topic_id = ?
-                ORDER BY p.order_index
+                WHERE tp.topic_id = ANY(?)
+                ORDER BY tp.topic_id, p.order_index
                 """,
-                (topic_id,),
+                (list(topic_ids),),
             ).fetchall()
-        result = []
         for row in rows:
             item = dict(row)
             item["dependent_topic_id"] = item.pop("topic_id")
             item["required_competencies"] = self._load_json(item.pop("required_competencies_json"), [])
-            result.append(item)
+            result[item["dependent_topic_id"]].append(item)
+        return result
+
+    def prerequisite_statuses(
+        self, student_id: str | None, topic_ids: Sequence[str]
+    ) -> dict[str, list[dict[str, Any]]]:
+        result = {topic_id: [] for topic_id in topic_ids}
+        if not topic_ids:
+            return result
+        with self._connect() as connection:
+            rows = [dict(row) for row in connection.execute(
+                """SELECT p.id,p.slug,p.title,p.course,tp.topic_id,tp.required_mastery,
+                    tp.relation_type,tp.reason,tp.required_competencies_json,tp.scope,tp.section_id,tp.rule_version
+                    FROM topic_prerequisites tp JOIN curriculum_topics p ON p.id=tp.prerequisite_topic_id
+                    WHERE tp.topic_id = ANY(?) ORDER BY tp.topic_id,p.order_index""",
+                (list(topic_ids),),
+            )]
+            prerequisite_ids = list({row["id"] for row in rows})
+            states = {}
+            verified_competencies: dict[tuple[str, str], set[str]] = {}
+            if student_id is not None and prerequisite_ids:
+                states = {
+                    row["topic_id"]: dict(row)
+                    for row in connection.execute(
+                        "SELECT topic_id,mastery,status FROM student_topic_states WHERE student_id=? AND topic_id = ANY(?)",
+                        (student_id, prerequisite_ids),
+                    )
+                }
+                for row in connection.execute(
+                    """SELECT prerequisite_topic_id,rule_version,competency FROM prerequisite_verifications
+                        WHERE student_id=? AND prerequisite_topic_id = ANY(?)""",
+                    (student_id, prerequisite_ids),
+                ):
+                    verified_competencies.setdefault(
+                        (row["prerequisite_topic_id"], row["rule_version"]), set()
+                    ).add(row["competency"])
+        for item in rows:
+            topic_id = item.pop("topic_id")
+            item["dependent_topic_id"] = topic_id
+            item["required_competencies"] = self._load_json(item.pop("required_competencies_json"), [])
+            state = states.get(item["id"])
+            verified = verified_competencies.get((item["id"], item["rule_version"]), set())
+            needed = set(item["required_competencies"])
+            item["verified_competencies"] = sorted(verified)
+            item["mastery"] = state["mastery"] if state else None
+            item["status"] = state["status"] if state else None
+            item["satisfied"] = bool(
+                state and state["status"] == "mastered" and state["mastery"] >= item["required_mastery"]
+            ) or bool(needed and needed <= verified)
+            result[topic_id].append(item)
         return result
 
     def get_unmet_prerequisites(
@@ -339,19 +400,7 @@ class LearningRepository:
                 if item["relation_type"] == "required" and item["scope"] == "topic" and not item["satisfied"]]
 
     def prerequisite_status(self, student_id: str | None, topic_id: str) -> list[dict[str, Any]]:
-        result = self.list_prerequisites(topic_id)
-        with self._connect() as connection:
-            for item in result:
-                state = connection.execute("SELECT mastery,status FROM student_topic_states WHERE student_id=? AND topic_id=?", (student_id,item["id"])).fetchone()
-                verified = {r["competency"] for r in connection.execute("""SELECT competency FROM prerequisite_verifications
-                    WHERE student_id=? AND prerequisite_topic_id=? AND rule_version=?""",
-                    (student_id,item["id"],item["rule_version"]))}
-                needed = set(item["required_competencies"])
-                item["verified_competencies"] = sorted(verified)
-                item["mastery"] = state["mastery"] if state else None
-                item["status"] = state["status"] if state else None
-                item["satisfied"] = bool(state and state["status"] == "mastered" and state["mastery"] >= item["required_mastery"]) or bool(needed and needed <= verified)
-        return result
+        return self.prerequisite_statuses(student_id, [topic_id])[topic_id]
 
     def ensure_topic_state(
         self,

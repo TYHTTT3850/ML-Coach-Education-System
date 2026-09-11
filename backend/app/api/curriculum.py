@@ -28,6 +28,7 @@ def _student_view(
     repository: LearningRepository,
     topic: dict,
     student_id: str | None,
+    unmet_prerequisites: list[dict] | None = None,
 ) -> dict:
     if student_id is None:
         return {
@@ -38,7 +39,7 @@ def _student_view(
             "locked_reason": None,
         }
 
-    unmet = repository.get_unmet_prerequisites(student_id, topic["id"])
+    unmet = unmet_prerequisites if unmet_prerequisites is not None else repository.get_unmet_prerequisites(student_id, topic["id"])
     stored_status = topic.get("state_status")
     status = stored_status or "not_started"
     if status == "locked":
@@ -62,6 +63,7 @@ def _summary(
     repository: LearningRepository,
     topic: dict,
     student_id: str | None,
+    unmet_prerequisites: list[dict] | None = None,
 ) -> TopicSummaryResponse:
     return TopicSummaryResponse(
         id=topic["id"],
@@ -70,7 +72,7 @@ def _summary(
         order_index=topic["order_index"],
         description=topic["description"],
         prerequisites=[PrerequisiteResponse.model_validate(item) for item in topic["prerequisites"]],
-        **_student_view(repository, topic, student_id),
+        **_student_view(repository, topic, student_id, unmet_prerequisites),
     )
 
 
@@ -84,6 +86,9 @@ def list_topics(
     if x_student_id is not None:
         repository.require_student(x_student_id, touch=True)
     topics = repository.list_topics(course, student_id=x_student_id)
+    prerequisite_statuses = repository.prerequisite_statuses(
+        x_student_id, [topic["id"] for topic in topics]
+    ) if x_student_id is not None else {}
     grouped: OrderedDict[int, CurriculumStageResponse] = OrderedDict()
     for topic in topics:
         stage = grouped.setdefault(
@@ -92,7 +97,11 @@ def list_topics(
                 stage=topic["stage"], title=topic["stage_title"], topics=[]
             ),
         )
-        stage.topics.append(_summary(repository, topic, x_student_id))
+        unmet = [
+            item for item in prerequisite_statuses.get(topic["id"], [])
+            if item["relation_type"] == "required" and item["scope"] == "topic" and not item["satisfied"]
+        ] if x_student_id is not None else None
+        stage.topics.append(_summary(repository, topic, x_student_id, unmet))
     return CurriculumResponse(course=course, stages=list(grouped.values()))
 
 

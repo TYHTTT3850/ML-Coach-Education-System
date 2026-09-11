@@ -84,10 +84,25 @@ class LearningService:
     def dashboard(self, *, student_id: str, course: Course) -> dict[str, Any]:
         self.repository.require_student(student_id)
         topics = self.repository.list_topics(course, student_id=student_id)
+        prerequisite_statuses = self.repository.prerequisite_statuses(
+            student_id, [topic["id"] for topic in topics]
+        )
         views: list[dict[str, Any]] = []
         for topic in topics:
-            state = self.repository.get_topic_state(student_id, topic["id"])
-            unmet = self.repository.get_unmet_prerequisites(student_id, topic["id"])
+            state = (
+                {
+                    "status": topic["state_status"],
+                    "mastery": topic["state_mastery"],
+                    "confidence": topic["state_confidence"],
+                    "evidence_count": topic["state_evidence_count"],
+                }
+                if topic["state_status"] is not None
+                else None
+            )
+            unmet = [
+                item for item in prerequisite_statuses[topic["id"]]
+                if item["relation_type"] == "required" and item["scope"] == "topic" and not item["satisfied"]
+            ]
             views.append(
                 {
                     "id": topic["id"],

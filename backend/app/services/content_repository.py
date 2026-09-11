@@ -234,7 +234,15 @@ class ContentRepository:
                 'published_count':len(items),
                 'needs_review_count':sum(t['id'] in x.topic_ids and x.validation_status=='needs_review' and x.publication_status!='archived' for x in bank)})
         byid={t['topic_id']:t for t in out}
-        dependencies={topic['id']:[p for p in self.repository.list_prerequisites(topic['id']) if p.get('relation_type','required')=='required' and p.get('scope','topic')=='topic'] for topic in topics}
+        topic_ids=[topic['id'] for topic in topics]
+        with self._connect() as c:
+            prerequisite_rows=c.execute("""SELECT p.id,p.title,tp.topic_id,tp.relation_type,tp.scope
+                FROM topic_prerequisites tp JOIN curriculum_topics p ON p.id=tp.prerequisite_topic_id
+                WHERE tp.topic_id = ANY(?) AND tp.relation_type='required' AND tp.scope='topic'
+                ORDER BY p.order_index""",(topic_ids,)).fetchall()
+        dependencies={topic_id:[] for topic_id in topic_ids}
+        for row in prerequisite_rows:
+            dependencies[row['topic_id']].append(dict(row))
         memo={}
         def ready(tid,seen):
             if tid in seen: return False
