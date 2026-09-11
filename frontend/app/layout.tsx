@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { StudentProvider } from "@/components/StudentProvider";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 
@@ -14,7 +15,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  colorScheme: "light",
   themeColor: "#f6f8fc",
 };
 
@@ -22,7 +22,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="zh-CN">
       <body>
-        <StudentProvider>{children}</StudentProvider>
+        <ThemeProvider>
+          <StudentProvider>{children}</StudentProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

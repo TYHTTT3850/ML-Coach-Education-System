@@ -3,6 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   output: "standalone",
+  devIndicators: false,
 };
 
 export default nextConfig;

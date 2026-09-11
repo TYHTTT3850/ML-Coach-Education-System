@@ -7,6 +7,7 @@ import {
   AlertIcon,
   BookIcon,
   DatabaseIcon,
+  GearIcon,
   SparklesIcon,
   TargetIcon,
 } from "@/components/Icons";
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { href: "/learn", label: "课程学习", icon: TargetIcon },
   { href: "/knowledge", label: "知识库", icon: DatabaseIcon },
   { href: "/question-bank", label: "题库", icon: BookIcon },
+  { href: "/settings", label: "设置", icon: GearIcon },
 ];
 
 export default function LearningShell({ children }: { children: ReactNode }) {
