@@ -13,7 +13,7 @@ import {
 import { useStudent } from "@/components/StudentProvider";
 
 const NAV_ITEMS = [
-  { href: "/", label: "自由问答", icon: SparklesIcon },
+  { href: "/?view=chat", label: "自由问答", icon: SparklesIcon },
   { href: "/learn", label: "课程学习", icon: TargetIcon },
   { href: "/knowledge", label: "知识库", icon: DatabaseIcon },
   { href: "/question-bank", label: "题库", icon: BookIcon },

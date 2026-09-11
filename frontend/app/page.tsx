@@ -134,11 +134,9 @@ export default function HomePage() {
   const currentError = chatError?.conversationId === activeConversation?.id ? chatError.message : null;
 
   function stopActiveRequest() {
-    if (loadingConversationId === activeConversation?.id) {
-      abortRef.current?.abort();
-      abortRef.current = null;
-      setLoadingConversationId(null);
-    }
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoadingConversationId(null);
   }
 
   function startNewConversation(course = currentCourse) {

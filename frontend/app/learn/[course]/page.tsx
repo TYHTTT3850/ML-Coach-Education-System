@@ -152,7 +152,7 @@ export default function CourseDashboardPage() {
               </div>
             </div>
           </div>
-          <Link href="/" className="inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-indigo-200 hover:text-indigo-700">
+          <Link href="/?view=chat" className="inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-indigo-200 hover:text-indigo-700">
             自由问答 <ArrowRightIcon className="size-4" />
           </Link>
         </div>

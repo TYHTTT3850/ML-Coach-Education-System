@@ -155,7 +155,7 @@ export default function KnowledgePage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Link
-              href="/"
+              href="/?view=chat"
               className="grid size-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               aria-label="返回课程问答"
             >
@@ -170,7 +170,7 @@ export default function KnowledgePage() {
             </div>
           </div>
           <Link
-            href="/"
+            href="/?view=chat"
             className="rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 sm:text-sm"
           >
             返回问答
