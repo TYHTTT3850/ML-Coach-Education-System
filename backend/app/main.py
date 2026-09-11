@@ -104,7 +104,7 @@ def create_app(
         allow_origins=app_settings.cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "X-Admin-Token", "X-Student-ID"],
+        allow_headers=["Authorization", "Content-Type", "X-Admin-Token"],
     )
 
     @app.exception_handler(AppError)

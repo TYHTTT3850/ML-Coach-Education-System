@@ -135,8 +135,11 @@ export type NextAction =
   | "course_completed"
   | string;
 
-export interface AnonymousStudent {
+export interface AuthenticatedStudent {
   student_id: string;
+  username: string;
+  display_name: string;
+  access_token: string;
   created_at: string;
 }
 

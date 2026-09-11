@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import {
-  AlertIcon,
   BookIcon,
   DatabaseIcon,
   GearIcon,
@@ -23,7 +22,7 @@ const NAV_ITEMS = [
 
 export default function LearningShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { status, error, retryInitialization } = useStudent();
+  const { student, logout } = useStudent();
 
   return (
     <main className="min-h-svh bg-canvas">
@@ -68,38 +67,12 @@ export default function LearningShell({ children }: { children: ReactNode }) {
             })}
           </nav>
 
-          <div className="hidden min-w-28 justify-end sm:flex">
-            <span
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium ${
-                status === "ready"
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : status === "error"
-                    ? "border-rose-200 bg-rose-50 text-rose-700"
-                    : "border-slate-200 bg-slate-50 text-slate-500"
-              }`}
-            >
-              <span className={`size-1.5 rounded-full ${status === "ready" ? "bg-emerald-500" : status === "error" ? "bg-rose-500" : "animate-pulse bg-slate-400"}`} />
-              {status === "ready" ? "学习记录已连接" : status === "error" ? "连接失败" : "正在连接"}
-            </span>
+          <div className="hidden min-w-28 items-center justify-end gap-3 sm:flex">
+            <span className="max-w-28 truncate text-xs font-semibold text-slate-600" title={student?.username}>{student?.display_name}</span>
+            <button type="button" onClick={() => void logout()} className="text-xs font-semibold text-slate-500 hover:text-slate-900">退出</button>
           </div>
         </div>
       </header>
-
-      {error && (
-        <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
-          <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
-            <AlertIcon className="mt-0.5 size-4 shrink-0" />
-            <span className="flex-1">{error}</span>
-            <button
-              type="button"
-              onClick={() => void retryInitialization()}
-              className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
-            >
-              重试
-            </button>
-          </div>
-        </div>
-      )}
 
       {children}
     </main>

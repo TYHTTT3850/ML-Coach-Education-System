@@ -1,53 +1,29 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { createAnonymousStudent, isStudentNotFound } from "@/lib/api";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { isStudentNotFound, logoutStudent } from "@/lib/api";
+import type { AuthenticatedStudent } from "@/lib/types";
 
-export const STUDENT_STORAGE_KEY = "course_coach_student_id";
+export const STUDENT_STORAGE_KEY = "course_coach_access_token";
+export const STUDENT_PROFILE_STORAGE_KEY = "course_coach_student_profile";
 
-type StudentStatus = "initializing" | "ready" | "error";
+type StudentStatus = "initializing" | "ready" | "unauthenticated" | "error";
 
 interface StudentContextValue {
   studentId: string | null;
+  student: Pick<AuthenticatedStudent, "student_id" | "username" | "display_name"> | null;
   status: StudentStatus;
   error: string | null;
   withStudent: <T>(request: (studentId: string) => Promise<T>) => Promise<T>;
-  retryInitialization: () => Promise<void>;
+  completeLogin: (student: AuthenticatedStudent) => void;
+  logout: () => Promise<void>;
 }
 
 const StudentContext = createContext<StudentContextValue | null>(null);
-let pendingStudentCreation: Promise<string> | null = null;
-
-async function createAndPersistStudent(): Promise<string> {
-  if (!pendingStudentCreation) {
-    pendingStudentCreation = createAnonymousStudent()
-      .then((student) => {
-        if (!student.student_id) throw new Error("服务端没有返回匿名学生 ID。");
-        try {
-          window.localStorage.setItem(STUDENT_STORAGE_KEY, student.student_id);
-        } catch {
-          // The current session can still learn if browser storage is unavailable.
-        }
-        return student.student_id;
-      })
-      .finally(() => {
-        pendingStudentCreation = null;
-      });
-  }
-  return pendingStudentCreation;
-}
 
 export function StudentProvider({ children }: { children: ReactNode }) {
   const [studentId, setStudentId] = useState<string | null>(null);
+  const [student, setStudent] = useState<StudentContextValue["student"]>(null);
   const [status, setStatus] = useState<StudentStatus>("initializing");
   const [error, setError] = useState<string | null>(null);
   const studentIdRef = useRef<string | null>(null);
@@ -57,25 +33,43 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     setStudentId(id);
   }, []);
 
+  const clearSession = useCallback(() => {
+    studentIdRef.current = null;
+    setStudentId(null);
+    setStudent(null);
+    try {
+      window.localStorage.removeItem(STUDENT_STORAGE_KEY);
+      window.localStorage.removeItem(STUDENT_PROFILE_STORAGE_KEY);
+    } catch { /* The UI still clears its in-memory session. */ }
+  }, []);
+
   const initialize = useCallback(async () => {
     setStatus("initializing");
     setError(null);
     try {
-      let storedId: string | null = null;
+      let storedToken: string | null = null;
+      let storedProfile: StudentContextValue["student"] = null;
       try {
-        storedId = window.localStorage.getItem(STUDENT_STORAGE_KEY);
+        storedToken = window.localStorage.getItem(STUDENT_STORAGE_KEY);
+        const rawProfile = window.localStorage.getItem(STUDENT_PROFILE_STORAGE_KEY);
+        storedProfile = rawProfile ? JSON.parse(rawProfile) : null;
       } catch {
-        // Fall through to a session-only anonymous student.
+        // Storage is optional; the user can still sign in for this session.
       }
-      const id = storedId?.trim() || (await createAndPersistStudent());
-      rememberStudent(id);
+      if (!storedToken?.trim() || !storedProfile?.student_id) {
+        clearSession();
+        setStatus("unauthenticated");
+        return;
+      }
+      rememberStudent(storedToken);
+      setStudent(storedProfile);
       setStatus("ready");
     } catch (cause) {
-      rememberStudent(null);
+      clearSession();
       setStatus("error");
-      setError(cause instanceof Error ? cause.message : "匿名学习身份创建失败，请稍后重试。");
+      setError(cause instanceof Error ? cause.message : "登录状态恢复失败，请重新登录。");
     }
-  }, [rememberStudent]);
+  }, [clearSession, rememberStudent]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void initialize(), 0);
@@ -85,12 +79,8 @@ export function StudentProvider({ children }: { children: ReactNode }) {
   const ensureStudent = useCallback(async (): Promise<string> => {
     const current = studentIdRef.current;
     if (current) return current;
-    const id = await createAndPersistStudent();
-    rememberStudent(id);
-    setStatus("ready");
-    setError(null);
-    return id;
-  }, [rememberStudent]);
+    throw new Error("请先登录后再继续学习。");
+  }, []);
 
   const withStudent = useCallback(
     async <T,>(request: (id: string) => Promise<T>): Promise<T> => {
@@ -100,32 +90,46 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       } catch (cause) {
         if (!isStudentNotFound(cause)) throw cause;
 
-        // The backend is authoritative. Replace a stale local ID and retry once.
-        try {
-          window.localStorage.removeItem(STUDENT_STORAGE_KEY);
-        } catch {
-          // Continue with a new session-only identity.
-        }
-        rememberStudent(null);
-        const replacementId = await createAndPersistStudent();
-        rememberStudent(replacementId);
-        setStatus("ready");
-        setError(null);
-        return request(replacementId);
+        clearSession();
+        setStatus("unauthenticated");
+        throw new Error("登录已过期，请重新登录。");
       }
     },
-    [ensureStudent, rememberStudent],
+    [clearSession, ensureStudent],
   );
+
+  const completeLogin = useCallback((authenticated: AuthenticatedStudent) => {
+    const profile = { student_id: authenticated.student_id, username: authenticated.username, display_name: authenticated.display_name };
+    rememberStudent(authenticated.access_token);
+    setStudent(profile);
+    try {
+      window.localStorage.setItem(STUDENT_STORAGE_KEY, authenticated.access_token);
+      window.localStorage.setItem(STUDENT_PROFILE_STORAGE_KEY, JSON.stringify(profile));
+    } catch { /* Keep the active session in memory when storage is unavailable. */ }
+    setError(null);
+    setStatus("ready");
+  }, [rememberStudent]);
+
+  const logout = useCallback(async () => {
+    const token = studentIdRef.current;
+    if (token) {
+      try { await logoutStudent(token); } catch { /* Local logout remains valid if the server is unavailable. */ }
+    }
+    clearSession();
+    setStatus("unauthenticated");
+  }, [clearSession]);
 
   const value = useMemo<StudentContextValue>(
     () => ({
       studentId,
+      student,
       status,
       error,
       withStudent,
-      retryInitialization: initialize,
+      completeLogin,
+      logout,
     }),
-    [error, initialize, status, studentId, withStudent],
+    [completeLogin, error, logout, status, student, studentId, withStudent],
   );
 
   return <StudentContext.Provider value={value}>{children}</StudentContext.Provider>;

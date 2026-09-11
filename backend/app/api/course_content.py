@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.types import Course
 from app.services.learning_service import LearningService
-from app.api.dependencies import build_rag_pipeline
+from app.api.dependencies import build_rag_pipeline, student_id_from_authorization
 from app.schemas.chat import ChatResponse
 from app.rag.pipeline import STRICT_FALLBACK_ANSWER
 from app.services.content_repository import ContentRepository
@@ -33,10 +33,9 @@ def registered_courses(request: Request):
 
 
 @router.get("/courses/{course}/outline")
-def outline(course: Course, request: Request, x_student_id: str | None = Header(default=None, alias="X-Student-ID")):
+def outline(course: Course, request: Request, authorization: str | None = Header(default=None, alias="Authorization")):
     repository = request.app.state.learning_repository
-    if x_student_id:
-        repository.require_student(x_student_id)
+    student_id = student_id_from_authorization(authorization, repository)
     with repository._connect() as connection:
         placements = [dict(row) for row in connection.execute("""SELECT p.*,t.title,t.description,t.course AS owner_course
             FROM topic_placements p JOIN curriculum_topics t ON t.id=p.topic_id
@@ -49,12 +48,12 @@ def outline(course: Course, request: Request, x_student_id: str | None = Header(
             )
         }
         states = {}
-        if x_student_id:
+        if student_id:
             states = {
                 row["topic_id"]: dict(row)
                 for row in connection.execute(
                     "SELECT * FROM student_topic_states WHERE student_id=? AND topic_id = ANY(?)",
-                    (x_student_id, topic_ids),
+                    (student_id, topic_ids),
                 )
             }
         prerequisite_rows = [dict(row) for row in connection.execute(
@@ -67,20 +66,20 @@ def outline(course: Course, request: Request, x_student_id: str | None = Header(
         )]
         prerequisite_states = {}
         verified_competencies: dict[tuple[str, str], set[str]] = {}
-        if x_student_id:
+        if student_id:
             prerequisite_ids = list({row["prerequisite_topic_id"] for row in prerequisite_rows})
             if prerequisite_ids:
                 prerequisite_states = {
                     row["topic_id"]: dict(row)
                     for row in connection.execute(
                         "SELECT * FROM student_topic_states WHERE student_id=? AND topic_id = ANY(?)",
-                        (x_student_id, prerequisite_ids),
+                        (student_id, prerequisite_ids),
                     )
                 }
                 for row in connection.execute(
                     """SELECT prerequisite_topic_id,rule_version,competency FROM prerequisite_verifications
                         WHERE student_id=? AND prerequisite_topic_id = ANY(?)""",
-                    (x_student_id, prerequisite_ids),
+                    (student_id, prerequisite_ids),
                 ):
                     verified_competencies.setdefault(
                         (row["prerequisite_topic_id"], row["rule_version"]), set()
@@ -105,7 +104,7 @@ def outline(course: Course, request: Request, x_student_id: str | None = Header(
         for edge in prerequisites.get(topic_id, []):
             if edge["relation_type"] != "required" or edge["scope"] != "topic":
                 continue
-            if not x_student_id:
+            if not student_id:
                 unmet.append(edge)
                 continue
             prerequisite_state = prerequisite_states.get(edge["id"])
@@ -135,18 +134,17 @@ def outline(course: Course, request: Request, x_student_id: str | None = Header(
 
 
 @router.get("/topics/{topic_id}/prerequisites")
-def prerequisites(topic_id: str, request: Request, x_student_id: str | None = Header(default=None, alias="X-Student-ID")):
+def prerequisites(topic_id: str, request: Request, authorization: str | None = Header(default=None, alias="Authorization")):
     repository = request.app.state.learning_repository
-    if x_student_id:
-        repository.require_student(x_student_id)
+    student_id = student_id_from_authorization(authorization, repository)
     topic = repository.require_topic(topic_id)
-    edges = repository.prerequisite_status(x_student_id, topic_id)
+    edges = repository.prerequisite_status(student_id, topic_id)
     with repository._connect() as connection:
         successors = [dict(row) for row in connection.execute("""SELECT t.id,t.title,t.course,p.relation_type,p.reason
             FROM topic_prerequisites p JOIN curriculum_topics t ON t.id=p.topic_id
             WHERE p.prerequisite_topic_id=? ORDER BY t.course,t.order_index""", (topic_id,))]
     return {"topic_id":topic_id,"owner_course":topic["course"],"rule_version":"content-v1","can_browse":True,"can_study":True,
-        "can_checkpoint":_can_checkpoint(request,x_student_id,topic),
+        "can_checkpoint":_can_checkpoint(request,student_id,topic),
         **{kind:[edge for edge in edges if edge["relation_type"]==kind] for kind in ("required","recommended","related")},
         "unmet":[edge for edge in edges if edge["relation_type"]=="required" and edge["scope"]=="topic" and not edge["satisfied"]],
         "successors":successors}

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import hmac
 import math
+import secrets
 import uuid
 from collections.abc import Sequence
 from contextlib import nullcontext
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import psycopg
@@ -81,6 +84,85 @@ class LearningRepository:
                 (student_id, now, now),
             )
         return {"id": student_id, "created_at": now, "last_active_at": now}
+
+    @staticmethod
+    def _password_hash(password: str, salt: bytes | None = None) -> str:
+        salt = salt or secrets.token_bytes(16)
+        digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 600_000)
+        return f"pbkdf2_sha256$600000${salt.hex()}${digest.hex()}"
+
+    @staticmethod
+    def _password_matches(password: str, encoded: str) -> bool:
+        try:
+            algorithm, rounds, salt_hex, digest_hex = encoded.split("$", 3)
+            if algorithm != "pbkdf2_sha256":
+                return False
+            calculated = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), int(rounds))
+            return hmac.compare_digest(calculated.hex(), digest_hex)
+        except (TypeError, ValueError):
+            return False
+
+    @staticmethod
+    def _token_hash(token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+    def register_student(self, *, username: str, password: str, display_name: str) -> dict[str, Any]:
+        student_id, now = str(uuid.uuid4()), self._now()
+        normalized_username = username.strip().lower()
+        with self._connect() as connection:
+            existing = connection.execute("SELECT 1 FROM students WHERE username = ?", (normalized_username,)).fetchone()
+            if existing is not None:
+                raise ValueError("username_taken")
+            connection.execute(
+                """INSERT INTO students(id, username, display_name, password_hash, created_at, last_active_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (student_id, normalized_username, display_name.strip(), self._password_hash(password), now, now),
+            )
+        return self._issue_session(student_id)
+
+    def authenticate_student(self, *, username: str, password: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            student = connection.execute(
+                "SELECT id, username, display_name, password_hash, created_at FROM students WHERE username = ? AND active = 1",
+                (username.strip().lower(),),
+            ).fetchone()
+        if student is None or not self._password_matches(password, student["password_hash"] or ""):
+            return None
+        return self._issue_session(student["id"])
+
+    def _issue_session(self, student_id: str) -> dict[str, Any]:
+        token, session_id, now = secrets.token_urlsafe(32), str(uuid.uuid4()), self._now()
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        with self._connect() as connection:
+            connection.execute(
+                """INSERT INTO student_sessions(id, student_id, token_hash, expires_at, created_at, last_used_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (session_id, student_id, self._token_hash(token), expires_at, now, now),
+            )
+            student = connection.execute(
+                "SELECT id, username, display_name, created_at FROM students WHERE id = ?", (student_id,)
+            ).fetchone()
+        return {**dict(student), "access_token": token}
+
+    def student_from_token(self, token: str, *, touch: bool = True) -> dict[str, Any]:
+        now = self._now()
+        with self._connect() as connection:
+            student = connection.execute(
+                """SELECT s.id, s.username, s.display_name, s.created_at, s.last_active_at
+                   FROM student_sessions ss JOIN students s ON s.id = ss.student_id
+                   WHERE ss.token_hash = ? AND ss.expires_at > ? AND s.active = 1""",
+                (self._token_hash(token), now),
+            ).fetchone()
+            if student is None:
+                raise StudentNotFoundError()
+            if touch:
+                connection.execute("UPDATE student_sessions SET last_used_at = ? WHERE token_hash = ?", (now, self._token_hash(token)))
+                connection.execute("UPDATE students SET last_active_at = ? WHERE id = ?", (now, student["id"]))
+        return dict(student)
+
+    def revoke_session(self, token: str) -> None:
+        with self._connect() as connection:
+            connection.execute("DELETE FROM student_sessions WHERE token_hash = ?", (self._token_hash(token),))
 
     def get_student(self, student_id: str) -> dict[str, Any] | None:
         with self._connect() as connection:

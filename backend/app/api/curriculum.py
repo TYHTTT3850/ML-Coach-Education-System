@@ -5,6 +5,7 @@ from collections import OrderedDict
 from fastapi import APIRouter, Header, Request
 
 from app.api.students import learning_repository_from_request
+from app.api.dependencies import student_id_from_authorization
 from app.core.types import Course
 from app.schemas.curriculum import (
     CurriculumResponse,
@@ -80,15 +81,14 @@ def _summary(
 def list_topics(
     request: Request,
     course: Course,
-    x_student_id: str | None = Header(default=None, alias="X-Student-ID"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> CurriculumResponse:
     repository = learning_repository_from_request(request)
-    if x_student_id is not None:
-        repository.require_student(x_student_id, touch=True)
-    topics = repository.list_topics(course, student_id=x_student_id)
+    student_id = student_id_from_authorization(authorization, repository)
+    topics = repository.list_topics(course, student_id=student_id)
     prerequisite_statuses = repository.prerequisite_statuses(
-        x_student_id, [topic["id"] for topic in topics]
-    ) if x_student_id is not None else {}
+        student_id, [topic["id"] for topic in topics]
+    ) if student_id is not None else {}
     grouped: OrderedDict[int, CurriculumStageResponse] = OrderedDict()
     for topic in topics:
         stage = grouped.setdefault(
@@ -100,8 +100,8 @@ def list_topics(
         unmet = [
             item for item in prerequisite_statuses.get(topic["id"], [])
             if item["relation_type"] == "required" and item["scope"] == "topic" and not item["satisfied"]
-        ] if x_student_id is not None else None
-        stage.topics.append(_summary(repository, topic, x_student_id, unmet))
+        ] if student_id is not None else None
+        stage.topics.append(_summary(repository, topic, student_id, unmet))
     return CurriculumResponse(course=course, stages=list(grouped.values()))
 
 
@@ -109,17 +109,16 @@ def list_topics(
 def topic_detail(
     topic_id: str,
     request: Request,
-    x_student_id: str | None = Header(default=None, alias="X-Student-ID"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> TopicDetailResponse:
     repository = learning_repository_from_request(request)
-    if x_student_id is not None:
-        repository.require_student(x_student_id, touch=True)
-    topic = repository.require_topic(topic_id, student_id=x_student_id)
+    student_id = student_id_from_authorization(authorization, repository)
+    topic = repository.require_topic(topic_id, student_id=student_id)
     state_by_dimension = {
         state["dimension"]: state
         for state in (
-            repository.list_dimension_states(x_student_id, topic_id)
-            if x_student_id is not None
+            repository.list_dimension_states(student_id, topic_id)
+            if student_id is not None
             else []
         )
     }
@@ -137,7 +136,7 @@ def topic_detail(
                 evidence_count=state["evidence_count"] if state else 0,
             )
         )
-    summary = _summary(repository, topic, x_student_id)
+    summary = _summary(repository, topic, student_id)
     return TopicDetailResponse(
         **summary.model_dump(),
         course=topic["course"],

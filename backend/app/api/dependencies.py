@@ -43,12 +43,33 @@ def learning_repository_from_request(request: Request) -> LearningRepository:
 
 
 def require_student_from_header(
-    x_student_id: str = Header(..., alias="X-Student-ID"),
+    authorization: str = Header(..., alias="Authorization"),
     repository: LearningRepository = Depends(learning_repository_from_request),
 ) -> dict:
-    """Validate the opaque backend-issued ID and refresh last activity."""
+    """Resolve the authenticated student from the opaque Bearer session token."""
 
-    return repository.require_student(x_student_id, touch=True)
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        from app.core.exceptions import StudentNotFoundError
+        raise StudentNotFoundError()
+    return repository.student_from_token(token, touch=True)
+
+
+def student_id_from_authorization(
+    authorization: str | None,
+    repository: LearningRepository,
+    *,
+    touch: bool = True,
+) -> str | None:
+    """Return a session's internal student ID, preserving anonymous read routes."""
+
+    if authorization is None:
+        return None
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        from app.core.exceptions import StudentNotFoundError
+        raise StudentNotFoundError()
+    return repository.student_from_token(token, touch=touch)["id"]
 
 
 def knowledge_service(

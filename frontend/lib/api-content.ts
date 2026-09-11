@@ -2,7 +2,7 @@ import { request, sanitizePublicPracticeSet } from "./api";
 import type { Course, PracticeAnswer, PracticeSubmitResult, Source } from "./types";
 import type { Assessment, AssessmentBlueprint, BankQueryResult, ContentCoverage, CourseOutline, Lesson, Prerequisites, WorkedExampleData } from "./types-content";
 
-const student = (id: string) => ({ "X-Student-ID": id });
+const student = (id: string) => ({ Authorization: `Bearer ${id}` });
 const jsonStudent = (id: string) => ({ ...student(id), "Content-Type": "application/json" });
 export const getCourseOutline = (course: Course, id: string) => request<CourseOutline>(`/api/v1/courses/${course}/outline`, { headers: student(id) });
 export const getPrerequisites = (topicId: string, id: string) => request<Prerequisites>(`/api/v1/topics/${encodeURIComponent(topicId)}/prerequisites`, { headers: student(id) });

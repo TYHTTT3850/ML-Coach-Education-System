@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Header, HTTPException, Request
 
-from app.api.dependencies import build_rag_pipeline
+from app.api.dependencies import build_rag_pipeline, student_id_from_authorization
 from app.core.exceptions import CourseTopicMismatchError
 from app.prompts.learning import get_learning_prompt
 from app.services.learning_grounding import LearningGroundingService
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/v1", tags=["chat"])
 async def chat(
     payload: ChatRequest,
     request: Request,
-    x_student_id: str | None = Header(default=None, alias="X-Student-ID"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> ChatResponse:
     settings = request.app.state.settings
     if len(payload.message) > settings.max_message_length:
@@ -31,10 +31,9 @@ async def chat(
     history = [item.model_dump() for item in payload.history[-settings.max_history_messages :]]
     retrieval_query: str | None = None
     system_prompt: str | None = None
+    repository = request.app.state.learning_repository
+    student_id = student_id_from_authorization(authorization, repository)
     if payload.topic_id is not None:
-        repository = request.app.state.learning_repository
-        if x_student_id is not None:
-            repository.require_student(x_student_id, touch=True)
         topic = repository.require_topic(payload.topic_id)
         if topic["course"] != payload.course.value:
             raise CourseTopicMismatchError(
@@ -50,9 +49,9 @@ async def chat(
         )
         if payload.learning_mode in {"topic_teaching", "worked_example", "remediation"}:
             system_prompt = get_learning_prompt(payload.course, payload.learning_mode)
-        if x_student_id is not None and payload.learning_mode != "free_qa":
+        if student_id is not None and payload.learning_mode != "free_qa":
             repository.create_learning_session(
-                student_id=x_student_id,
+            student_id=student_id,
                 course=payload.course,
                 topic_id=payload.topic_id,
                 state=payload.learning_mode,

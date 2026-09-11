@@ -1,7 +1,25 @@
 CREATE TABLE IF NOT EXISTS students (
     id TEXT PRIMARY KEY,
+    username TEXT UNIQUE,
+    display_name TEXT,
+    password_hash TEXT,
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
     created_at TEXT NOT NULL,
     last_active_at TEXT NOT NULL
+);
+
+ALTER TABLE students ADD COLUMN IF NOT EXISTS username TEXT UNIQUE;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1));
+
+CREATE TABLE IF NOT EXISTS student_sessions (
+    id TEXT PRIMARY KEY,
+    student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    last_used_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS courses (
@@ -224,6 +242,7 @@ CREATE INDEX IF NOT EXISTS idx_bank_filters ON question_bank_items(primary_cours
 CREATE INDEX IF NOT EXISTS idx_exposure_student_family ON content_exposures(student_id, family_id, kind);
 CREATE INDEX IF NOT EXISTS idx_documents_course ON documents(course);
 CREATE INDEX IF NOT EXISTS idx_documents_updated_at ON documents(updated_at);
+CREATE INDEX IF NOT EXISTS idx_student_sessions_token_hash ON student_sessions(token_hash);
 
 CREATE OR REPLACE FUNCTION enforce_registered_course() RETURNS trigger AS $$
 BEGIN

@@ -1,5 +1,5 @@
 import type {
-  AnonymousStudent,
+  AuthenticatedStudent,
   ChatRequest,
   ChatResponse,
   Course,
@@ -119,7 +119,7 @@ export function sendChat(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(studentId ? { "X-Student-ID": studentId } : {}),
+      ...(studentId ? { Authorization: `Bearer ${studentId}` } : {}),
     },
     body: JSON.stringify(payload),
     signal,
@@ -127,7 +127,7 @@ export function sendChat(
 }
 
 function studentHeaders(studentId: string): HeadersInit {
-  return { "X-Student-ID": studentId };
+  return { Authorization: `Bearer ${studentId}` };
 }
 
 function jsonStudentHeaders(studentId: string): HeadersInit {
@@ -138,8 +138,27 @@ export function isStudentNotFound(error: unknown): boolean {
   return error instanceof ApiError && error.code?.toUpperCase() === "STUDENT_NOT_FOUND";
 }
 
-export function createAnonymousStudent(): Promise<AnonymousStudent> {
-  return request<AnonymousStudent>("/api/v1/students/anonymous", { method: "POST" });
+export function registerStudent(payload: { username: string; password: string; display_name: string }): Promise<AuthenticatedStudent> {
+  return request<AuthenticatedStudent>("/api/v1/students/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function loginStudent(payload: { username: string; password: string }): Promise<AuthenticatedStudent> {
+  return request<AuthenticatedStudent>("/api/v1/students/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function logoutStudent(accessToken: string): Promise<void> {
+  return request<void>("/api/v1/students/logout", {
+    method: "POST",
+    headers: studentHeaders(accessToken),
+  });
 }
 
 export function getCurriculum(
