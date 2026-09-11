@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import LearningShell from "@/components/LearningShell";
 
 export const metadata: Metadata = {
   title: "知识库管理",
@@ -6,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function KnowledgeLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return children;
+  return <LearningShell>{children}</LearningShell>;
 }

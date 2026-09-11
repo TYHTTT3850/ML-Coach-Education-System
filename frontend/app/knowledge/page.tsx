@@ -1,18 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import CourseSelector from "@/components/CourseSelector";
 import {
   AlertIcon,
-  ArrowLeftIcon,
   BookIcon,
   DatabaseIcon,
   EyeIcon,
   EyeOffIcon,
   FileIcon,
   RefreshIcon,
-  SparklesIcon,
   TrashIcon,
 } from "@/components/Icons";
 import KnowledgeUploader from "@/components/KnowledgeUploader";
@@ -150,35 +147,7 @@ export default function KnowledgePage() {
   );
 
   return (
-    <main className="min-h-svh bg-canvas">
-      <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <Link
-              href="/?view=chat"
-              className="grid size-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-              aria-label="返回课程问答"
-            >
-              <ArrowLeftIcon className="size-4" />
-            </Link>
-            <span className="hidden size-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white sm:grid">
-              <SparklesIcon className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold tracking-tight text-slate-900">知识库管理</h1>
-              <p className="hidden text-[11px] text-slate-400 sm:block">Course Coach · 课程资料与向量索引</p>
-            </div>
-          </div>
-          <Link
-            href="/?view=chat"
-            className="rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 sm:text-sm"
-          >
-            返回问答
-          </Link>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-10 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-10 lg:px-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600">Knowledge Base</p>
@@ -385,7 +354,6 @@ export default function KnowledgePage() {
             )}
           </section>
         </div>
-      </div>
-    </main>
+    </div>
   );
 }
