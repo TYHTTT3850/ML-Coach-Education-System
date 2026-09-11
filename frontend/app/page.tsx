@@ -1,17 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ChatInput from "@/components/ChatInput";
 import ChatWindow from "@/components/ChatWindow";
 import CourseSelector from "@/components/CourseSelector";
+import LearningShell from "@/components/LearningShell";
 import {
   AlertIcon,
   ClockIcon,
   DatabaseIcon,
   PlusIcon,
-  SparklesIcon,
-  TargetIcon,
   TrashIcon,
 } from "@/components/Icons";
 import SourcePanel from "@/components/SourcePanel";
@@ -255,22 +253,13 @@ export default function HomePage() {
   }
 
   return (
-    <main className="h-svh min-h-[620px] overflow-hidden bg-canvas lg:grid lg:grid-cols-[272px_minmax(0,1fr)] xl:grid-cols-[272px_minmax(0,1fr)_352px]">
-      <aside className="hidden h-svh flex-col border-r border-slate-200 bg-white/85 px-4 py-5 backdrop-blur lg:flex">
-        <div className="flex items-center gap-3 px-2">
-          <span className="grid size-10 place-items-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-200">
-            <SparklesIcon className="size-5" />
-          </span>
-          <div>
-            <h1 className="text-base font-bold tracking-tight text-slate-900">Course Coach</h1>
-            <p className="text-[11px] text-slate-400">课程知识问答助手</p>
-          </div>
-        </div>
-
+    <LearningShell>
+      <div className="h-[calc(100svh-73px)] min-h-[547px] overflow-hidden bg-canvas lg:grid lg:grid-cols-[272px_minmax(0,1fr)] xl:grid-cols-[272px_minmax(0,1fr)_352px]">
+      <aside className="hidden h-full flex-col border-r border-slate-200 bg-white/85 px-4 py-5 backdrop-blur lg:flex">
         <button
           type="button"
           onClick={() => startNewConversation()}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
         >
           <PlusIcon className="size-4" />
           新建对话
@@ -315,27 +304,9 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="mt-4 space-y-2">
-          <Link
-            href="/learn"
-            className="flex items-center gap-3 rounded-xl bg-indigo-600 px-3 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
-          >
-            <TargetIcon className="size-4" />
-            进入课程学习
-            <span className="ml-auto text-indigo-200" aria-hidden="true">→</span>
-          </Link>
-          <Link
-            href="/knowledge"
-            className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            <DatabaseIcon className="size-4" />
-            知识库管理
-            <span className="ml-auto text-slate-300" aria-hidden="true">→</span>
-          </Link>
-        </div>
       </aside>
 
-      <section className="app-grid-bg flex h-svh min-w-0 flex-col">
+      <section className="app-grid-bg flex h-full min-w-0 flex-col">
         <header className="z-10 shrink-0 border-b border-slate-200/80 bg-white/85 px-4 py-3 backdrop-blur-xl sm:px-6">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
@@ -355,14 +326,6 @@ export default function HomePage() {
               </div>
             </div>
             <div className="flex items-center gap-1.5">
-              <Link
-                href="/learn"
-                className="inline-flex size-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition hover:bg-indigo-100 hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                aria-label="进入课程学习"
-                title="进入课程学习"
-              >
-                <TargetIcon className="size-4.5" />
-              </Link>
               <button
                 type="button"
                 onClick={() => startNewConversation()}
@@ -371,13 +334,6 @@ export default function HomePage() {
               >
                 <PlusIcon className="size-4.5" />
               </button>
-              <Link
-                href="/knowledge"
-                className="inline-flex size-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 lg:hidden"
-                aria-label="知识库管理"
-              >
-                <DatabaseIcon className="size-4.5" />
-              </Link>
               <button
                 type="button"
                 onClick={clearCurrentConversation}
@@ -464,6 +420,7 @@ export default function HomePage() {
           <SourcePanel sources={latestAssistant?.sources ?? []} />
         </div>
       </aside>
-    </main>
+      </div>
+    </LearningShell>
   );
 }

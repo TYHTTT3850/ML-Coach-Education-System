@@ -42,7 +42,11 @@ export default function LearningShell({ children }: { children: ReactNode }) {
 
           <nav className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50/80 p-1" aria-label="主导航">
             {NAV_ITEMS.map((item) => {
-              const active = item.href === "/learn" ? pathname.startsWith("/learn") : pathname === item.href;
+              const active = item.href.startsWith("/?")
+                ? pathname === "/"
+                : item.href === "/learn"
+                  ? pathname.startsWith("/learn")
+                  : pathname === item.href;
               const Icon = item.icon;
               return (
                 <Link
