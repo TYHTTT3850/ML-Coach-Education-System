@@ -77,7 +77,7 @@ npm run build
 
 ## 运行数据说明
 
-业务数据和向量均存储在 `DATABASE_URL` 指向的 PostgreSQL 数据库中；`backend/data/` 下仅保留上传文件。首次部署须在项目根目录执行 `backend/.venv/Scripts/python.exe operations/database/initialize.py`；应用运行时不会创建或修改表结构。现有 SQLite 数据需要在保留原库备份后使用专用工具导入 PostgreSQL，应用不会自动删除或改写旧库。
+业务数据和向量均存储在 `DATABASE_URL` 指向的 PostgreSQL 数据库中；`backend/data/` 下仅保留上传文件。首次部署须在项目根目录执行 `backend/.venv/Scripts/python.exe operations/database/initialize.py`；应用运行时不会创建或修改表结构。
 
 # 项目结构
 
@@ -250,7 +250,6 @@ Pydantic 请求和响应模型，用于 API 数据校验与序列化。
 - `data/uploads/`：用户上传的文档。
 - `knowledge/advanced_mathematics/`：高等数学知识库原始内容。
 - `knowledge/machine_learning/`：机器学习知识库原始内容。
-- `scripts/audit_content_upgrade.py`：审计课程内容升级情况。
 
 ### `backend/tests/`
 

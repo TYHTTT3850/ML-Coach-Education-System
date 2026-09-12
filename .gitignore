@@ -40,8 +40,6 @@ backend/data/chroma/*
 !backend/data/chroma/.gitkeep
 backend/data/uploads/*
 !backend/data/uploads/.gitkeep
-backend/data/documents.db
-backend/data/documents.db-*
 backend/data/*.sqlite
 backend/data/*.sqlite-*
 backend/data/*.sqlite3
