@@ -13,8 +13,6 @@ from app.core.types import Course
 from app.curriculum.models import CurriculumSeed
 from app.curriculum.seed import seed_curriculum
 from app.curriculum.validation import CurriculumCycleError, validate_curriculum
-from app.db.database import connect_sqlite
-from app.db.migrations import LEARNING_SCHEMA_SQL, migrate_database
 from app.rag.pipeline import RAGPipeline
 from app.rag.retriever import Retriever
 from app.rag.vector_store import RetrievalCandidate
@@ -134,37 +132,6 @@ def test_topic_scoped_retrieval_fails_closed_for_untagged_chunks():
     assert source["topic_id"] == "prob.conditional_probability"
 
 
-def test_v2_migration_preserves_learning_row_values_and_foreign_keys(tmp_path):
-    path=tmp_path/"legacy.db"
-    with connect_sqlite(path) as connection:
-        connection.executescript(LEARNING_SCHEMA_SQL)
-        connection.execute("CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY,name TEXT,applied_at TEXT)")
-        connection.executemany("INSERT INTO schema_migrations VALUES (?,?,'then')",[(1,"learning"),(2,"compatibility")])
-        connection.execute("INSERT INTO students VALUES ('student','then','then')")
-        topic={"id":"ml.legacy","course":"machine_learning","slug":"legacy","title":"历史知识点","stage":1,"stage_title":"历史阶段","order_index":1,"description":"历史描述","learning_objectives_json":"[]","aliases_json":"[]","retrieval_keywords_json":"[]","difficulty":"easy","required_dimensions_json":"[]","active":1,"created_at":"then","updated_at":"then"}
-        connection.execute(f"INSERT INTO curriculum_topics({','.join(topic)}) VALUES ({','.join('?' for _ in topic)})",tuple(topic.values()))
-        connection.execute("INSERT INTO student_topic_states(student_id,topic_id,mastery,status,evidence_count,updated_at) VALUES ('student','ml.legacy',0.88,'mastered',9,'then')")
-        connection.execute("INSERT INTO student_dimension_states(student_id,topic_id,dimension,mastery,updated_at) VALUES ('student','ml.legacy','concept',0.88,'then')")
-        connection.execute("""INSERT INTO practice_sets(id,student_id,topic_id,course,mode,status,requested_difficulty,source_snapshot_json,created_at)
-            VALUES ('set','student','ml.legacy','machine_learning','practice','submitted','easy','[]','then')""")
-        connection.execute("""INSERT INTO practice_questions VALUES ('question','set',1,'numeric','easy','原题',NULL,'[]','{}','[]','[]','hash','then')""")
-        connection.execute("""INSERT INTO practice_submissions VALUES ('submission','set','student','client',95,'evaluated',0.8,0.88,'{}','{}','then')""")
-        connection.execute("""INSERT INTO practice_attempts VALUES ('attempt','submission','question','student','5',95,'correct','{}','[]','[]','[]',0,'反馈','解析','[]',1,1,'then')""")
-        connection.execute("""INSERT INTO learning_sessions VALUES ('session','student','machine_learning','ml.legacy','learning','then',NULL,'then','then')""")
-        tables=("curriculum_topics","students","student_topic_states","student_dimension_states","practice_sets","practice_questions","practice_submissions","practice_attempts","learning_sessions")
-        before={table:[dict(row) for row in connection.execute(f"SELECT * FROM {table}")] for table in tables}
-    assert migrate_database(path) == [3,4]
-    assert migrate_database(path) == []
-    with connect_sqlite(path) as connection:
-        assert connection.execute("PRAGMA foreign_key_check").fetchall()==[]
-        assert connection.execute("PRAGMA integrity_check").fetchone()[0]=="ok"
-        for table,records in before.items():
-            current=[dict(row) for row in connection.execute(f"SELECT * FROM {table}")]
-            assert len(current)==len(records)
-            for old,new in zip(records,current,strict=True):
-                assert all(new[key]==value for key,value in old.items())
-
-
 def test_upload_tags_and_explicit_annotation_do_not_reembed(client, mock_embedding):
     response=client.post("/api/v1/knowledge/upload",headers={"X-Admin-Token":"test-admin-token"},
         data={"course":"linear_algebra","topic_ids":["la.dot_product"]},
@@ -197,20 +164,3 @@ def test_authorized_supplement_cannot_use_untagged_course_chunks(client):
     assert answer.json()["retrieval_count"]==0
 
 
-def test_content_migration_rolls_back_every_alter_and_marker_on_failure(tmp_path, monkeypatch):
-    import app.db.migrations as migrations
-    original = migrations.MIGRATIONS
-    path = tmp_path / "failed-v4.db"
-    monkeypatch.setattr(migrations, "MIGRATIONS", original[:3])
-    migrate_database(path)
-    failing = migrations.Migration(4, "course_content_assessment", original[3].sql + "\nSELECT * FROM intentionally_missing_table;")
-    monkeypatch.setattr(migrations, "MIGRATIONS", (*original[:3], failing))
-    with pytest.raises(sqlite3.DatabaseError):
-        migrate_database(path)
-    with connect_sqlite(path) as connection:
-        assert connection.execute("SELECT 1 FROM schema_migrations WHERE version=4").fetchone() is None
-        assert connection.execute("SELECT 1 FROM sqlite_master WHERE name='lessons'").fetchone() is None
-        assert "purpose" not in {row["name"] for row in connection.execute("PRAGMA table_info(practice_sets)")}
-        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-    monkeypatch.setattr(migrations, "MIGRATIONS", original)
-    assert migrate_database(path) == [4]

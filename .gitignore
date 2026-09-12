@@ -63,6 +63,7 @@ Desktop.ini
 # Local Docker overrides and temporary artifacts
 compose.override.yaml
 docker-compose.override.yml
+operations/database/*.backup
 tmp/
 temp/
 *.log

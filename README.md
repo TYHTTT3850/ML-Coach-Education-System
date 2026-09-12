@@ -41,6 +41,35 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 脚本读取 `backend/.env.local` 中的 `DATABASE_URL`，执行 `operations/database/initialize_postgresql.sql` 创建当前全部表、索引、函数和触发器。该脚本面向空数据库；重复执行不会重复创建已有对象，但不会把旧版本数据库升级到当前结构。
 
+## 数据备份与迁移
+
+代码包不包含 PostgreSQL 中的学生、题库、学习记录、上传文档元数据和 Embedding 向量。需要交付现有数据时，安装 PostgreSQL 客户端工具，并在源端导出：
+
+```powershell
+$env:DATABASE_URL = "postgresql://user:password@host:5432/ml_coach"
+.\operations\database\backup.ps1 -OutputPath .\ml-coach.backup
+```
+
+在接收方创建空的 PostgreSQL 数据库、安装匹配版本的 `pgvector` 后，使用同样方式设置目标 `DATABASE_URL`，再恢复备份：
+
+```powershell
+.\operations\database\restore.ps1 -BackupPath .\ml-coach.backup
+```
+
+恢复会清除目标数据库中的同名对象，目标必须是专用的可覆盖数据库。仅交付空系统时，无需备份和恢复，只执行上面的数据库初始化命令。
+
+## PostgreSQL 架构测试
+
+后端测试默认不会连接数据库。为验证全新 PostgreSQL 数据库的建表脚本，请创建专用空库（不可指向开发或生产库），并运行：
+
+```powershell
+$env:POSTGRES_TEST_DATABASE_URL = "postgresql://user:password@host:5432/ml_coach_test"
+cd backend
+.\.venv\Scripts\python.exe -m pytest -q tests/test_learning_migrations.py
+```
+
+该测试会连续两次执行初始化脚本，并校验 `pgvector` 扩展及核心表是否存在。
+
 ## 后端
 
 Windows PowerShell：
