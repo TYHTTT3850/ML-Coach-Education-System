@@ -15,6 +15,7 @@ import {
 } from "@/components/Icons";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 import SourcePanel from "@/components/SourcePanel";
+import ModelSelector from "@/components/ModelSelector";
 import { useStudent } from "@/components/StudentProvider";
 import {
   ApiError,
@@ -315,6 +316,7 @@ export default function PracticePanel({
             <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600"><TargetIcon className="size-4" />主动检验理解</div>
             <h2 className="mt-2 text-lg font-bold text-slate-900">{bankMode ? "自己练习与知识点测试" : "AI 按课程资料动态出题"}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">{bankMode ? practiceOnly ? "当前为自选辅助练习，可以重复作答、请求提示或尝试后查看解法。已曝光解法的重答不算新的独立证据；也可在下方另抽未见练习。" : "每次从已发布题库抽取 4 道未见、未曝光同源解法的练习，题库总量以覆盖报告为准。使用提示或查看解法会转为辅助学习；正式测试提交前不提供答案，刷新可继续原测试。" : "点击后由 AI 检索当前知识点的课程资料，按原有多题型和薄弱维度生成新题，不从固定题库抽题。普通练习 3 题，综合验收 5 题；答案提交后显示，刷新可继续原题。资料不足时会明确提示。"}</p>
+            {!bankMode && <div className="mt-3"><ModelSelector feature="practice" label="出题模型" /></div>}
             <Link href="/question-bank" className="mt-3 inline-block text-xs font-semibold text-indigo-700">浏览保留的题库，自选辅助练习 →</Link>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">

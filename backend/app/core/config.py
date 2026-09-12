@@ -30,20 +30,10 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:3000"
     admin_token: SecretStr = SecretStr("")
 
-    llm_provider: str = "openai_compatible"
-    llm_api_style: Literal["chat_completions", "responses"] = "chat_completions"
-    llm_base_url: str = ""
-    llm_api_key: SecretStr = SecretStr("")
-    llm_model: str = ""
     llm_temperature: float = Field(default=0.2, ge=0, le=2)
     llm_timeout_seconds: float = Field(default=60, gt=0, le=600)
 
-    embedding_provider: Literal["api", "local"] = "api"
-    embedding_base_url: str = ""
-    embedding_api_key: SecretStr = SecretStr("")
-    embedding_model: str = ""
     embedding_dimension: int | None = Field(default=None, ge=1)
-    local_embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
     chroma_path: Path = Path("./data/chroma")
     database_url: str = "postgresql://postgres:postgres@localhost:5432/ml_coach"
@@ -107,16 +97,6 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [item.strip() for item in self.frontend_origin.split(",") if item.strip()]
-
-    @property
-    def llm_configured(self) -> bool:
-        return bool(self.llm_model.strip() and self.llm_api_key.get_secret_value().strip())
-
-    @property
-    def embedding_configured(self) -> bool:
-        if self.embedding_provider == "local":
-            return bool(self.local_embedding_model.strip())
-        return bool(self.embedding_model.strip() and self.embedding_api_key.get_secret_value().strip())
 
     def ensure_data_directories(self) -> None:
         self.chroma_path.mkdir(parents=True, exist_ok=True)

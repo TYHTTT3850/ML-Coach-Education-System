@@ -20,6 +20,7 @@ import type {
   RemediationResponse,
   CurriculumTopic,
 } from "@/lib/types";
+import { getAiModel, getEmbeddingBaseUrl, getEmbeddingModel, getLlmBaseUrl, getUserEmbeddingApiKey, getUserLlmApiKey, type AiFeature } from "@/lib/llm-settings";
 
 const configuredBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
@@ -84,13 +85,26 @@ function errorMessage(payload: unknown, fallback: string): string {
 export async function request<T>(
   path: string,
   init: RequestInit = {},
+  aiFeature?: AiFeature,
 ): Promise<T> {
+  const userLlmApiKey = getUserLlmApiKey();
+  const userEmbeddingApiKey = getUserEmbeddingApiKey();
+  const llmBaseUrl = getLlmBaseUrl();
+  const embeddingBaseUrl = getEmbeddingBaseUrl();
+  const llmModel = aiFeature ? getAiModel(aiFeature) : null;
+  const embeddingModel = getEmbeddingModel();
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       headers: {
         Accept: "application/json",
+        ...(userLlmApiKey ? { "X-LLM-API-Key": userLlmApiKey } : {}),
+        ...(userEmbeddingApiKey ? { "X-Embedding-API-Key": userEmbeddingApiKey } : {}),
+        ...(llmBaseUrl ? { "X-LLM-Base-URL": llmBaseUrl } : {}),
+        ...(embeddingBaseUrl ? { "X-Embedding-Base-URL": embeddingBaseUrl } : {}),
+        ...(llmModel ? { "X-LLM-Model": llmModel } : {}),
+        ...(embeddingModel ? { "X-Embedding-Model": embeddingModel } : {}),
         ...init.headers,
       },
     });
@@ -123,7 +137,7 @@ export function sendChat(
     },
     body: JSON.stringify(payload),
     signal,
-  });
+  }, payload.learning_mode === "free_qa" ? "free_qa" : "teaching");
 }
 
 function studentHeaders(studentId: string): HeadersInit {
@@ -398,7 +412,7 @@ export async function createPracticeSet(
     method: "POST",
     headers: jsonStudentHeaders(studentId),
     body: JSON.stringify(payload),
-  });
+  }, "practice");
   return sanitizePublicPracticeSet(response);
 }
 
@@ -436,7 +450,7 @@ export function requestRemediation(
     method: "POST",
     headers: jsonStudentHeaders(studentId),
     body: JSON.stringify(payload),
-  });
+  }, "practice");
 }
 
 export function getLearningHistory(

@@ -26,6 +26,18 @@ class CloseableLLMClient(MockLLMClient):
         self.closed = True
 
 
+class UserKeyLLMClient(MockLLMClient):
+    def __init__(self, _settings, api_key: str, base_url: str, model: str) -> None:
+        super().__init__()
+        self.api_key = api_key
+        self.base_url = base_url
+        self.model = model
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
+
+
 def test_chat_api_validates_course_message_and_history(client) -> None:
     assert client.post(
         "/api/v1/chat",
@@ -76,6 +88,63 @@ def test_strict_chat_fallback_does_not_require_llm_configuration(
     assert first_response.json()["retrieval_count"] == 0
     assert second_response.status_code == 200
     assert application.state.llm_client is None
+
+
+def test_chat_uses_user_provided_key_and_closes_client(
+    monkeypatch, settings, mock_embedding
+) -> None:
+    import app.main as main_module
+
+    clients: list[UserKeyLLMClient] = []
+
+    def create_user_key_client(request_settings, api_key, base_url, model):
+        client = UserKeyLLMClient(request_settings, api_key, base_url, model)
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr(main_module, "LazyLLMClient", create_user_key_client)
+    application = create_app(settings, embedding_client=mock_embedding, llm_client=MockLLMClient())
+    chunk = Chunk(
+        chunk_id="user_key_chunk",
+        text="逻辑回归使用交叉熵进行训练。",
+        metadata={
+            "chunk_id": "user_key_chunk",
+            "document_id": "user_key_doc",
+            "course": Course.MACHINE_LEARNING.value,
+            "source_file": "user-key.md",
+            "title": "逻辑回归",
+            "chapter": "分类",
+            "section": "交叉熵",
+            "page": -1,
+            "chunk_index": 0,
+            "file_hash": "user_key_hash",
+        },
+    )
+    with TestClient(application) as test_client:
+        application.state.vector_store.upsert(
+            Course.MACHINE_LEARNING,
+            [chunk],
+            mock_embedding.embed_documents([chunk.text]),
+        )
+        response = test_client.post(
+            "/api/v1/chat",
+            headers={
+                "X-LLM-API-Key": "user-provided-key",
+                "X-LLM-Base-URL": "https://api.example.com/v1",
+                "X-LLM-Model": "example-model",
+            },
+            json={
+                "course": "machine_learning",
+                "message": "逻辑回归为什么使用交叉熵？",
+                "history": [],
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    assert [client.api_key for client in clients] == ["user-provided-key"]
+    assert clients[0].base_url == "https://api.example.com/v1"
+    assert clients[0].model == "example-model"
+    assert clients[0].closed is True
 
 
 def test_lazy_llm_proxy_is_cached_after_nonempty_retrieval(settings, mock_embedding) -> None:

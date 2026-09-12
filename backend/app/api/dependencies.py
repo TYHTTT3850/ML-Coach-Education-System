@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import Depends, Header, Request
 
 from app.core.config import Settings
+from app.core.exceptions import ConfigurationError
 from app.rag.hyde import HyDEGenerator
 from app.rag.pipeline import RAGPipeline
 from app.rag.prompt_builder import PromptBuilder
@@ -25,15 +26,21 @@ def settings_from_request(request: Request) -> Settings:
 
 
 def embedding_from_request(request: Request) -> EmbeddingClient:
-    if request.app.state.embedding_client is None:
-        request.app.state.embedding_client = create_embedding_client(request.app.state.settings)
-    return request.app.state.embedding_client
+    request_embedding_client = getattr(request.state, "embedding_client", None)
+    if request_embedding_client is not None:
+        return request_embedding_client
+    if request.app.state.embedding_client is not None:
+        return request.app.state.embedding_client
+    raise ConfigurationError("请先在设置页填写 Embedding API Key")
 
 
 def llm_from_request(request: Request) -> LLMClient:
-    if request.app.state.llm_client is None:
-        request.app.state.llm_client = LazyLLMClient(request.app.state.settings)
-    return request.app.state.llm_client
+    request_llm_client = getattr(request.state, "llm_client", None)
+    if request_llm_client is not None:
+        return request_llm_client
+    if request.app.state.llm_client is not None:
+        return request.app.state.llm_client
+    raise ConfigurationError("请先在设置页填写 API Key")
 
 
 def learning_repository_from_request(request: Request) -> LearningRepository:

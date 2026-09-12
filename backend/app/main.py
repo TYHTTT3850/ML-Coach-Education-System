@@ -26,7 +26,9 @@ from app.core.logging import configure_logging
 from app.curriculum.seed import seed_curriculum
 from app.rag.vector_store import ChromaVectorStore
 from app.services.document_registry import DocumentRegistry
+from app.services.embedding.factory import create_embedding_client
 from app.services.learning_repository import LearningRepository
+from app.services.llm.factory import LazyLLMClient
 
 
 logger = logging.getLogger(__name__)
@@ -46,8 +48,6 @@ def create_app(
         app_settings.app_log_level,
         (
             app_settings.admin_token.get_secret_value(),
-            app_settings.llm_api_key.get_secret_value(),
-            app_settings.embedding_api_key.get_secret_value(),
         ),
     )
     app_registry = registry or DocumentRegistry(app_settings.database_url)
@@ -99,12 +99,36 @@ def create_app(
     app.state.embedding_client = embedding_client
     app.state.llm_client = llm_client
 
+    @app.middleware("http")
+    async def user_model_clients(request: Request, call_next):
+        llm_api_key = request.headers.get("X-LLM-API-Key", "").strip()
+        embedding_api_key = request.headers.get("X-Embedding-API-Key", "").strip()
+        llm_base_url = request.headers.get("X-LLM-Base-URL", "").strip()
+        embedding_base_url = request.headers.get("X-Embedding-Base-URL", "").strip()
+        llm_model = request.headers.get("X-LLM-Model", "").strip()
+        embedding_model = request.headers.get("X-Embedding-Model", "").strip()
+        if llm_api_key:
+            request.state.llm_client = LazyLLMClient(app_settings, llm_api_key, llm_base_url, llm_model)
+        if embedding_api_key:
+            request.state.embedding_client = create_embedding_client(app_settings, embedding_api_key, embedding_base_url, embedding_model)
+        try:
+            return await call_next(request)
+        finally:
+            for client_name in ("llm_client", "embedding_client"):
+                client = getattr(request.state, client_name, None)
+                close = getattr(client, "close", None)
+                if close is None:
+                    continue
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=app_settings.cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Admin-Token"],
+        allow_headers=["Authorization", "Content-Type", "X-Admin-Token", "X-LLM-API-Key", "X-Embedding-API-Key", "X-LLM-Base-URL", "X-Embedding-Base-URL", "X-LLM-Model", "X-Embedding-Model"],
     )
 
     @app.exception_handler(AppError)

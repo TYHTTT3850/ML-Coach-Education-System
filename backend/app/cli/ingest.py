@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import sys
 from pathlib import Path
 
@@ -40,8 +41,6 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging(
         settings.app_log_level,
         (
-            settings.embedding_api_key.get_secret_value(),
-            settings.llm_api_key.get_secret_value(),
             settings.admin_token.get_secret_value(),
         ),
     )
@@ -53,13 +52,22 @@ def main(argv: list[str] | None = None) -> int:
     if not files:
         print("失败：没有找到支持的 .md、.txt、.pdf 或 .docx 文件", file=sys.stderr)
         return 2
+    embedding_api_key = getpass.getpass("Embedding API Key: ").strip()
+    if not embedding_api_key:
+        print("失败：必须提供 Embedding API Key", file=sys.stderr)
+        return 2
+    embedding_base_url = input("Embedding API Base URL: ").strip()
+    embedding_model = input("Embedding model: ").strip()
+    if not embedding_base_url or not embedding_model:
+        print("失败：必须提供 Embedding API Base URL 和模型", file=sys.stderr)
+        return 2
 
     try:
         settings.ensure_data_directories()
         registry = DocumentRegistry(settings.database_url)
         vector_store = ChromaVectorStore(settings.chroma_path, settings.chroma_distance_metric)
         vector_store.initialize()
-        embedding_client = create_embedding_client(settings)
+        embedding_client = create_embedding_client(settings, embedding_api_key, embedding_base_url, embedding_model)
         service = KnowledgeService(
             settings=settings,
             registry=registry,

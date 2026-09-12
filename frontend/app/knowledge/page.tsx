@@ -15,6 +15,7 @@ import {
 import KnowledgeUploader from "@/components/KnowledgeUploader";
 import DocumentTopicTagger from "@/components/DocumentTopicTagger";
 import { deleteDocument, getKnowledgeStats, listDocuments } from "@/lib/api";
+import { EMBEDDING_MODEL_STORAGE_KEY, getEmbeddingModel } from "@/lib/llm-settings";
 import {
   COURSE_META,
   COURSES,
@@ -67,6 +68,7 @@ export default function KnowledgePage() {
   const [adminToken, setAdminToken] = useState("");
   const [tokenReady, setTokenReady] = useState(false);
   const [showToken, setShowToken] = useState(false);
+  const [embeddingModel, setEmbeddingModel] = useState("");
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,6 +79,7 @@ export default function KnowledgePage() {
     const timer = window.setTimeout(() => {
       try {
         setAdminToken(window.sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? "");
+        setEmbeddingModel(getEmbeddingModel() ?? "");
       } finally {
         setTokenReady(true);
       }
@@ -115,6 +118,13 @@ export default function KnowledgePage() {
     } catch {
       // The page still works if browser storage is unavailable.
     }
+  }
+
+  function updateEmbeddingModel(value: string) {
+    setEmbeddingModel(value);
+    const normalizedModel = value.trim();
+    if (normalizedModel) window.localStorage.setItem(EMBEDDING_MODEL_STORAGE_KEY, normalizedModel);
+    else window.localStorage.removeItem(EMBEDDING_MODEL_STORAGE_KEY);
   }
 
   async function handleDelete(document: KnowledgeDocument) {
@@ -247,6 +257,22 @@ export default function KnowledgePage() {
               </div>
               <p className="mt-2 text-[11px] leading-5 text-slate-400">
                 不会写入代码或 localStorage，关闭标签页后由浏览器清除。
+              </p>
+              <label htmlFor="embedding-model" className="mt-5 block text-xs font-medium text-slate-600">
+                Embedding 模型
+              </label>
+              <input
+                id="embedding-model"
+                type="text"
+                value={embeddingModel}
+                onChange={(event) => updateEmbeddingModel(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="填写 Embedding 模型名称"
+                className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-100/70"
+              />
+              <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                上传资料和课程检索均使用此模型；更换模型后请重新上传资料以保持向量一致。
               </p>
             </section>
 
