@@ -1,3 +1,12 @@
+# 技术栈
+
+- 前端：Next.js、React、TypeScript、Tailwind CSS。
+- 后端：FastAPI、Pydantic、Uvicorn、Python。
+- AI 能力：兼容 OpenAI API 的 LLM 与 Embedding 服务，结合 BM25 和向量检索实现 RAG。
+- 数据库：PostgreSQL 与 `pgvector`。业务数据、文档分块、来源元数据和 Embedding 向量均持久化在 PostgreSQL；向量存储于 `document_chunks.embedding`，不依赖独立向量数据库。
+
+> 启动前，必须在 PostgreSQL 服务端安装与 PostgreSQL 主版本匹配的 `pgvector` 扩展文件。安装完成后，数据库初始化脚本会执行 `CREATE EXTENSION IF NOT EXISTS vector`；若扩展文件尚未安装，该命令会失败。
+
 # 启动方式
 
 ## 环境变量
