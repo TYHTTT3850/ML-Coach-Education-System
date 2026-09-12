@@ -147,7 +147,6 @@ def settings(tmp_path) -> Settings:
     return Settings(
         _env_file=None,
         app_env="test",
-        sqlite_path=tmp_path / "db.sqlite",
         upload_path=tmp_path / "uploads",
     )
 

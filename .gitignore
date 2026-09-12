@@ -34,14 +34,6 @@ yarn-error.log*
 pnpm-debug.log*
 *.tsbuildinfo
 
-# Local runtime caches
-backend/data/chroma/*
-!backend/data/chroma/.gitkeep
-backend/data/*.sqlite
-backend/data/*.sqlite-*
-backend/data/*.sqlite3
-backend/data/*.sqlite3-*
-
 # Editors and operating systems
 .idea/
 .vscode/

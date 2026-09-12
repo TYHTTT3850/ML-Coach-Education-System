@@ -247,16 +247,14 @@ def _complete_first_topic(
 
 
 def test_complete_learning_loop_for_both_courses_and_persist_after_restart(
-    tmp_path,
+    tmp_path, postgres_test_database_url,
 ) -> None:
     settings = Settings(
         _env_file=None,
         app_env="test",
-        sqlite_path=tmp_path / "learning-e2e.db",
+        database_url=postgres_test_database_url,
         upload_path=tmp_path / "uploads",
         admin_token="test-admin-token",
-        embedding_provider="local",
-        local_embedding_model="mock-model",
         rag_top_k=6,
         rag_strict_mode=True,
     )
@@ -341,8 +339,8 @@ def test_complete_learning_loop_for_both_courses_and_persist_after_restart(
         )
         assert llm.answers == []
 
-    # A fresh FastAPI process over the same SQLite path sees the same anonymous
-    # learner state; startup migration and Seed remain idempotent.
+    # A fresh FastAPI process over the same PostgreSQL database sees the same
+    # anonymous learner state; startup seed remains idempotent.
     restarted = create_app(
         settings,
         embedding_client=MockEmbeddingClient(),

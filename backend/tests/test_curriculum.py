@@ -42,9 +42,8 @@ def _topic(
 
 
 @pytest.fixture
-def repository(tmp_path) -> LearningRepository:
-    value = LearningRepository(tmp_path / "learning.db")
-    value.initialize()
+def repository(postgres_test_database_url) -> LearningRepository:
+    value = LearningRepository(postgres_test_database_url)
     return value
 
 

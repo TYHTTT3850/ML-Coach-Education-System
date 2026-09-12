@@ -193,7 +193,7 @@ def test_public_bank_schema_hides_answers_and_verification():
 
 @pytest.mark.parametrize("topic_id", list(TOPICS))
 def test_real_read_examples_practice_prerequisite_checkpoint_flow(topic_id, settings):
-    """Exercise each actual student flow using only the tmp_path SQLite DB.
+    """Exercise each actual student flow using the isolated PostgreSQL test database.
 
     This catches a bank that looks sufficient in counts but becomes unusable
     once the student has followed the intended path and read worked examples.

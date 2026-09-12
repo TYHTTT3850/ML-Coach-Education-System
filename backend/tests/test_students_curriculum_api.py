@@ -9,9 +9,8 @@ from app.curriculum.seed import seed_curriculum
 from app.services.learning_repository import LearningRepository, StudentNotFoundError
 
 
-def _client(tmp_path) -> tuple[TestClient, LearningRepository]:
-    repository = LearningRepository(tmp_path / "api.db")
-    repository.initialize()
+def _client(postgres_test_database_url) -> tuple[TestClient, LearningRepository]:
+    repository = LearningRepository(postgres_test_database_url)
     seed_curriculum(repository)
     app = FastAPI()
     app.state.learning_repository = repository
@@ -20,8 +19,8 @@ def _client(tmp_path) -> tuple[TestClient, LearningRepository]:
     return TestClient(app), repository
 
 
-def test_anonymous_student_is_created_by_backend(tmp_path) -> None:
-    client, repository = _client(tmp_path)
+def test_anonymous_student_is_created_by_backend(postgres_test_database_url) -> None:
+    client, repository = _client(postgres_test_database_url)
     response = client.post("/api/v1/students/anonymous")
 
     assert response.status_code == 201
@@ -30,8 +29,8 @@ def test_anonymous_student_is_created_by_backend(tmp_path) -> None:
     assert repository.get_student(payload["student_id"]) is not None
 
 
-def test_missing_student_is_rejected(tmp_path) -> None:
-    _, repository = _client(tmp_path)
+def test_missing_student_is_rejected(postgres_test_database_url) -> None:
+    _, repository = _client(postgres_test_database_url)
 
     try:
         repository.require_student("6ab2192e-e096-4018-bc08-f452230c5ca7")
@@ -41,8 +40,8 @@ def test_missing_student_is_rejected(tmp_path) -> None:
         raise AssertionError("missing student should be rejected")
 
 
-def test_learning_request_touches_last_active_at(tmp_path, monkeypatch) -> None:
-    client, repository = _client(tmp_path)
+def test_learning_request_touches_last_active_at(postgres_test_database_url, monkeypatch) -> None:
+    client, repository = _client(postgres_test_database_url)
     monkeypatch.setattr(
         LearningRepository,
         "_now",
@@ -67,8 +66,8 @@ def test_learning_request_touches_last_active_at(tmp_path, monkeypatch) -> None:
     )
 
 
-def test_curriculum_response_hides_unstarted_beta_prior(tmp_path) -> None:
-    client, repository = _client(tmp_path)
+def test_curriculum_response_hides_unstarted_beta_prior(postgres_test_database_url) -> None:
+    client, repository = _client(postgres_test_database_url)
     student = repository.create_anonymous_student()
 
     response = client.get(
@@ -89,8 +88,8 @@ def test_curriculum_response_hides_unstarted_beta_prior(tmp_path) -> None:
     assert second["locked_reason"] is None
 
 
-def test_topic_detail_exposes_objectives_and_empty_dimension_state(tmp_path) -> None:
-    client, repository = _client(tmp_path)
+def test_topic_detail_exposes_objectives_and_empty_dimension_state(postgres_test_database_url) -> None:
+    client, repository = _client(postgres_test_database_url)
     student = repository.create_anonymous_student()
 
     response = client.get(

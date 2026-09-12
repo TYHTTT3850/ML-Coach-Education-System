@@ -164,7 +164,6 @@ def _settings(tmp_path) -> Settings:
     return Settings(
         _env_file=None,
         app_env="test",
-        sqlite_path=tmp_path / "db.sqlite",
         upload_path=tmp_path / "uploads",
     )
 
@@ -264,9 +263,8 @@ async def test_uncertain_attempt_cannot_drive_remediation(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_remediation_matches_repository_attempt_context_contract(tmp_path) -> None:
-    repository = LearningRepository(tmp_path / "learning.db")
-    repository.initialize()
+async def test_remediation_matches_repository_attempt_context_contract(tmp_path, postgres_test_database_url) -> None:
+    repository = LearningRepository(postgres_test_database_url)
     seed_curriculum(repository)
     student_id = repository.create_anonymous_student()["id"]
     topic_id = "ml.machine_learning_basics"

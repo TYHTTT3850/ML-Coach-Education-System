@@ -79,7 +79,6 @@ def _service(tmp_path, llm: SequenceLLM) -> EvaluationService:
     settings = Settings(
         _env_file=None,
         app_env="test",
-        sqlite_path=tmp_path / "db.sqlite",
         upload_path=tmp_path / "uploads",
     )
     return EvaluationService(

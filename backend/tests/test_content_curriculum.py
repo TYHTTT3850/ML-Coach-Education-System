@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 
 import pytest
+import psycopg
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -23,9 +23,8 @@ from tests.test_curriculum import _topic
 
 
 @pytest.fixture
-def repository(tmp_path):
-    repo = LearningRepository(tmp_path / "curriculum.db")
-    repo.initialize()
+def repository(postgres_test_database_url):
+    repo = LearningRepository(postgres_test_database_url)
     seed_curriculum(repo)
     return repo
 
@@ -41,11 +40,11 @@ def test_global_required_cycle_rejected_but_related_network_allowed():
 
 def test_database_guards_global_cycle_and_registered_course(repository):
     with repository._connect() as connection:
-        with pytest.raises(sqlite3.IntegrityError, match="cycle"):
+        with pytest.raises(psycopg.DatabaseError, match="cycle"):
             connection.execute("INSERT INTO topic_prerequisites(topic_id,prerequisite_topic_id) VALUES ('la.vectors','ml.linear_regression')")
-        with pytest.raises(sqlite3.IntegrityError):
+        with pytest.raises(psycopg.DatabaseError):
             connection.execute("INSERT INTO topic_prerequisites(topic_id,prerequisite_topic_id) VALUES ('la.vectors','la.vectors')")
-        with pytest.raises(sqlite3.IntegrityError, match="unregistered_course"):
+        with pytest.raises(psycopg.DatabaseError, match="unregistered_course"):
             connection.execute("UPDATE curriculum_topics SET course='unregistered' WHERE id='la.vectors'")
 
 

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 import uuid
 
 import pytest
+import psycopg
 
 from app.core.exceptions import (
     PracticeSetAlreadySubmittedError,
@@ -45,9 +45,8 @@ def _topic(
 
 
 @pytest.fixture
-def repository(tmp_path) -> LearningRepository:
-    value = LearningRepository(tmp_path / "learning.db")
-    value.initialize()
+def repository(postgres_test_database_url) -> LearningRepository:
+    value = LearningRepository(postgres_test_database_url)
     value.upsert_curriculum(
         [
             CurriculumSeed.model_validate(
@@ -442,16 +441,19 @@ def test_history_prerequisites_and_atomic_finalize_rollback(
     with repository._connect() as connection:
         connection.execute(
             """
+            CREATE OR REPLACE FUNCTION reject_test_mastery_update() RETURNS trigger AS $$
+            BEGIN
+                RAISE EXCEPTION 'forced_atomic_rollback';
+            END;
+            $$ LANGUAGE plpgsql;
             CREATE TRIGGER reject_test_mastery_update
             BEFORE UPDATE ON student_topic_states
-            WHEN NEW.topic_id = 'ml.target'
-            BEGIN
-                SELECT RAISE(ABORT, 'forced_atomic_rollback');
-            END
+            FOR EACH ROW WHEN (NEW.topic_id = 'ml.target')
+            EXECUTE FUNCTION reject_test_mastery_update()
             """
         )
 
-    with pytest.raises(sqlite3.DatabaseError, match="forced_atomic_rollback"):
+    with pytest.raises(psycopg.DatabaseError, match="forced_atomic_rollback"):
         repository.finalize_submission(
             submission_id=submission_id,
             practice_set=practice_set,
