@@ -6,6 +6,7 @@ import {
   SparklesIcon,
   TargetIcon,
 } from "@/components/Icons";
+import ModelSelector from "@/components/ModelSelector";
 import { COURSE_META, COURSES, type Course } from "@/lib/types";
 
 const COURSE_DETAILS: Record<Course, { stages: string; cue: string; gradient: string; ring: string }> = {
@@ -46,6 +47,9 @@ export default function LearnHomePage() {
           <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
             选择一门课程，系统会依据前置关系引导你讲解、练习、评价和补救。每一次有效作答都会形成学习证据，并给出清晰的下一步。
           </p>
+          <div className="mt-5">
+            <ModelSelector feature="learning" label="课程学习模型" />
+          </div>
         </section>
 
         <section className="mt-9 grid gap-5 md:grid-cols-2" aria-label="选择课程">

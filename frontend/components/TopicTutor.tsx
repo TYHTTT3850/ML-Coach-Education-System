@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AlertIcon, MessageIcon, SendIcon, SparklesIcon } from "@/components/Icons";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 import SourcePanel from "@/components/SourcePanel";
-import ModelSelector from "@/components/ModelSelector";
 import { useStudent } from "@/components/StudentProvider";
 import { sendChat } from "@/lib/api";
 import type { ChatMessage, Course } from "@/lib/types";
@@ -99,7 +98,6 @@ export default function TopicTutor({
           <div>
             <h2 className="text-base font-bold text-slate-900">AI 例题与课程答疑</h2>
             <p className="mt-0.5 text-xs leading-5 text-slate-500">围绕“{topicTitle}”检索真实课程资料；点击后才生成，不计入考试成绩</p>
-            <div className="mt-2"><ModelSelector feature="teaching" label="讲解模型" /></div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

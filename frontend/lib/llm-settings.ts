@@ -6,7 +6,7 @@ export const CUSTOM_LLM_API_BASE_URL_STORAGE_KEY = "course-coach:custom-llm-api-
 export const CUSTOM_EMBEDDING_API_BASE_URL_STORAGE_KEY = "course-coach:custom-embedding-api-base-url";
 export const EMBEDDING_MODEL_STORAGE_KEY = "course-coach:embedding-model";
 
-export type AiFeature = "free_qa" | "teaching" | "practice";
+export type AiFeature = "free_qa" | "learning" | "teaching" | "practice";
 export type LlmProviderId = "deepseek" | "qwen" | "siliconflow" | "moonshot" | "zhipu" | "baichuan" | "hunyuan" | "volcengine" | "qianfan" | "minimax" | "modelscope" | "custom";
 export type EmbeddingProviderId = "qwen" | "siliconflow" | "zhipu" | "volcengine" | "modelscope" | "custom";
 
@@ -41,8 +41,9 @@ export const EMBEDDING_PROVIDERS: Record<EmbeddingProviderId, AiProvider> = {
 
 const FEATURE_MODEL_STORAGE_KEYS: Record<AiFeature, string> = {
   free_qa: "course-coach:model-free-qa",
-  teaching: "course-coach:model-teaching",
-  practice: "course-coach:model-practice",
+  learning: "course-coach:model-learning",
+  teaching: "course-coach:model-learning",
+  practice: "course-coach:model-learning",
 };
 
 function getUserApiKey(storageKey: string): string | null {
