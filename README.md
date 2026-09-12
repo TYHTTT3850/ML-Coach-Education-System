@@ -323,7 +323,7 @@ Pydantic 请求和响应模型，用于 API 数据校验与序列化。
 
 # 数据库表结构
 
-数据库结构由 `operations/database/initialize_postgresql.sql` 定义，当前使用 PostgreSQL，共 22 张业务表。表中的 `*_json` 字段保存结构化 JSON 文本；时间字段当前统一按文本格式保存，由应用层写入 ISO 8601 时间。除特别说明外，`id` 为业务标识，`created_at`、`updated_at` 等字段为记录时间。
+数据库结构由 `operations/database/initialize_postgresql.sql` 定义，当前使用 PostgreSQL，共 24 张业务表。`*_json` 字段和 `JSONB` 字段保存结构化 JSON 数据；时间字段当前统一按文本格式保存，由应用层写入 ISO 8601 时间。除特别说明外，`id` 为业务标识，`created_at`、`updated_at` 等字段为记录时间。
 
 ## 表清单
 
@@ -408,6 +408,20 @@ Pydantic 请求和响应模型，用于 API 数据校验与序列化。
 | `chunk_count` | 切分出的文本块数量 |
 | `status` | 导入状态 |
 | `error_message` | 导入失败信息，可为空 |
+| `created_at`、`updated_at` | 创建和更新时间 |
+
+### `document_chunks`：知识库文档片段与向量
+
+保存文档切分后的可检索文本、来源元数据和 pgvector Embedding。每个片段关联一份知识库文档；删除文档时其片段会级联删除。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 主键，文本片段标识 |
+| `document_id` | 所属知识库文档，外键关联 `documents(id)` |
+| `course` | 所属课程，用于课程隔离检索 |
+| `content` | 切分后的文本内容 |
+| `metadata` | JSONB 来源元数据，包括章节、页码、文件哈希和知识点标签 |
+| `embedding` | pgvector 向量，用于余弦、L2 或内积相似度检索 |
 | `created_at`、`updated_at` | 创建和更新时间 |
 
 ### `learning_sessions`：学习会话
@@ -595,13 +609,17 @@ Pydantic 请求和响应模型，用于 API 数据校验与序列化。
 
 该表通过 `(student_id, topic_id)` 外键关联 `student_topic_states`，主题状态删除时级联删除。
 
-### `students`：学生
+### `students`：学生账户
 
-保存匿名学生身份和活跃时间。
+保存学生账户、认证信息和活跃状态。匿名学习身份仅使用 `id` 和时间字段；注册账户同时保存用户名、显示名称和密码哈希。
 
 | 字段 | 说明 |
 | --- | --- |
 | `id` | 主键，学生标识 |
+| `username` | 登录用户名，可为空且全局唯一 |
+| `display_name` | 页面展示名称，可为空 |
+| `password_hash` | 密码哈希，可为空，不保存明文密码 |
+| `active` | 账户是否启用，`0` 或 `1`，默认 `1` |
 | `created_at` | 创建时间 |
 | `last_active_at` | 最近活跃时间 |
 
@@ -657,4 +675,4 @@ Pydantic 请求和响应模型，用于 API 数据校验与序列化。
 
 ## 主要索引
 
-初始化脚本为课程主题排序、前置主题查询、学生掌握状态、练习集与提交历史、误解事件、学习会话、题库筛选、内容曝光和文档课程/更新时间建立索引，以支持课程导航、学习仪表盘、练习评价和知识库管理等查询。
+初始化脚本为课程主题排序、前置主题查询、学生掌握状态、练习集与提交历史、误解事件、学习会话、题库筛选、内容曝光、文档课程/更新时间及文档片段的课程/文档关联建立索引，以支持课程导航、学习仪表盘、练习评价和知识库管理等查询。
