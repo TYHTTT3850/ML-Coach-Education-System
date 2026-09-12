@@ -1,6 +1,5 @@
 # Environment variables and local secrets
 **/.env.local
-Todo.md
 
 # Python
 __pycache__/
@@ -35,21 +34,13 @@ yarn-error.log*
 pnpm-debug.log*
 *.tsbuildinfo
 
-# Runtime data (keep directories through .gitkeep files when present)
+# Local runtime caches
 backend/data/chroma/*
 !backend/data/chroma/.gitkeep
-backend/data/uploads/*
-!backend/data/uploads/.gitkeep
 backend/data/*.sqlite
 backend/data/*.sqlite-*
 backend/data/*.sqlite3
 backend/data/*.sqlite3-*
-
-# User course materials. Only the deliberately small SAMPLE files are versioned.
-backend/knowledge/machine_learning/*
-!backend/knowledge/machine_learning/SAMPLE_机器学习基础.md
-backend/knowledge/advanced_mathematics/*
-!backend/knowledge/advanced_mathematics/SAMPLE_高等数学基础.md
 
 # Editors and operating systems
 .idea/
@@ -63,7 +54,6 @@ Desktop.ini
 # Local Docker overrides and temporary artifacts
 compose.override.yaml
 docker-compose.override.yml
-operations/database/*.backup
 tmp/
 temp/
 *.log
