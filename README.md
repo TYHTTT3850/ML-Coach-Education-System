@@ -68,7 +68,7 @@ npm run build
 
 ## 运行数据说明
 
-业务数据存储在 `DATABASE_URL` 指向的 PostgreSQL 数据库中；`backend/data/` 下仅保留 Chroma 索引和上传文件。首次部署须在项目根目录执行 `backend/.venv/Scripts/python.exe operations/database/initialize.py`；应用运行时不会创建或修改表结构。现有 SQLite 数据需要在保留原库备份后使用专用工具导入 PostgreSQL，应用不会自动删除或改写旧库。
+业务数据和向量均存储在 `DATABASE_URL` 指向的 PostgreSQL 数据库中；`backend/data/` 下仅保留上传文件。首次部署须在项目根目录执行 `backend/.venv/Scripts/python.exe operations/database/initialize.py`；应用运行时不会创建或修改表结构。现有 SQLite 数据需要在保留原库备份后使用专用工具导入 PostgreSQL，应用不会自动删除或改写旧库。
 
 # 项目结构
 
@@ -83,7 +83,7 @@ ML-Coach-Education-System/
 │       └── initialize_postgresql.sql   # 当前完整数据库结构
 ├── backend/                          # FastAPI 后端
 │   ├── app/                          # 后端应用源码
-│   ├── data/                         # Chroma 索引和上传文件
+│   ├── data/                         # 上传文件
 │   ├── knowledge/                    # 用于构建知识库的课程资料
 │   ├── scripts/                      # 内容审计等辅助脚本
 │   ├── tests/                        # 后端自动化测试
@@ -181,7 +181,7 @@ API 路由层只负责 HTTP 请求、参数接收和响应组织，具体业务�
 - `pipeline.py`：串联加载、切分、Embedding、入库和检索流程。
 - `prompt_builder.py`：根据检索结果构造问答 Prompt。
 - `retriever.py`：融合向量检索和 BM25 的混合检索器。
-- `vector_store.py`：Chroma 向量库的初始化、写入、查询和删除。
+- `vector_store.py`：PostgreSQL pgvector 的初始化、写入、查询和删除。
 
 ### `backend/app/db/`
 
@@ -244,7 +244,6 @@ Pydantic 请求和响应模型，用于 API 数据校验与序列化。
 
 ### `backend/data/`、`backend/knowledge/`、`backend/scripts/`
 
-- `data/chroma/`：Chroma 持久化向量库，由运行时生成，通常不手工编辑。
 - `data/uploads/`：用户上传的文档。
 - `knowledge/advanced_mathematics/`：高等数学知识库原始内容。
 - `knowledge/machine_learning/`：机器学习知识库原始内容。

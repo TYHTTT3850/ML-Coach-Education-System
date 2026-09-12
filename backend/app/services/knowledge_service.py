@@ -23,7 +23,7 @@ from app.rag.loaders import (
     sanitize_filename,
     validate_mime_type,
 )
-from app.rag.vector_store import ChromaVectorStore
+from app.rag.vector_store import PgVectorStore
 from app.services.document_registry import DocumentRegistry
 from app.services.embedding.base import EmbeddingClient
 from app.services.learning_repository import LearningRepository
@@ -44,7 +44,7 @@ class KnowledgeService:
         *,
         settings: Settings,
         registry: DocumentRegistry,
-        vector_store: ChromaVectorStore,
+        vector_store: PgVectorStore,
         embedding_client: EmbeddingClient | None = None,
         loader: DocumentLoader | None = None,
         chunker: StructuredChunker | None = None,

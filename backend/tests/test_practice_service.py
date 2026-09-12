@@ -148,7 +148,6 @@ def settings(tmp_path) -> Settings:
         _env_file=None,
         app_env="test",
         sqlite_path=tmp_path / "db.sqlite",
-        chroma_path=tmp_path / "chroma",
         upload_path=tmp_path / "uploads",
     )
 

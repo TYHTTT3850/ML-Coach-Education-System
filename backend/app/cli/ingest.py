@@ -9,7 +9,7 @@ from app.core.config import Settings
 from app.core.logging import configure_logging
 from app.core.types import Course
 from app.rag.loaders import ALLOWED_EXTENSIONS
-from app.rag.vector_store import ChromaVectorStore
+from app.rag.vector_store import PgVectorStore
 from app.services.document_registry import DocumentRegistry
 from app.services.embedding.factory import create_embedding_client
 from app.services.knowledge_service import KnowledgeService
@@ -65,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         settings.ensure_data_directories()
         registry = DocumentRegistry(settings.database_url)
-        vector_store = ChromaVectorStore(settings.chroma_path, settings.chroma_distance_metric)
+        vector_store = PgVectorStore(settings.database_url, settings.vector_distance_metric)
         vector_store.initialize()
         embedding_client = create_embedding_client(settings, embedding_api_key, embedding_base_url, embedding_model)
         service = KnowledgeService(

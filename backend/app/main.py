@@ -24,7 +24,7 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import AppError, VectorStoreError
 from app.core.logging import configure_logging
 from app.curriculum.seed import seed_curriculum
-from app.rag.vector_store import ChromaVectorStore
+from app.rag.vector_store import PgVectorStore
 from app.services.document_registry import DocumentRegistry
 from app.services.embedding.factory import create_embedding_client
 from app.services.learning_repository import LearningRepository
@@ -54,9 +54,9 @@ def create_app(
     app_learning_repository = learning_repository or LearningRepository(
         app_settings.database_url
     )
-    app_vector_store = vector_store or ChromaVectorStore(
-        app_settings.chroma_path,
-        app_settings.chroma_distance_metric,
+    app_vector_store = vector_store or PgVectorStore(
+        app_settings.database_url,
+        app_settings.vector_distance_metric,
     )
 
     @asynccontextmanager

@@ -17,7 +17,7 @@ class GroundingResult:
     """Real course chunks selected for one learning operation.
 
     HyDE text is intentionally absent.  Only immutable snapshots of genuine
-    Chroma candidates cross the boundary into question generation/evaluation.
+    Retrieved candidates cross the boundary into question generation/evaluation.
     """
 
     query: str

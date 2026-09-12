@@ -211,6 +211,8 @@ CREATE TABLE IF NOT EXISTS content_exposures (
     assessment_id TEXT, created_at TEXT NOT NULL
 );
 
+CREATE EXTENSION IF NOT EXISTS vector;
+
 CREATE TABLE IF NOT EXISTS documents (
     id TEXT PRIMARY KEY,
     course TEXT NOT NULL,
@@ -224,6 +226,17 @@ CREATE TABLE IF NOT EXISTS documents (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE(course, sha256)
+);
+
+CREATE TABLE IF NOT EXISTS document_chunks (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    course TEXT NOT NULL,
+    content TEXT NOT NULL,
+    metadata JSONB NOT NULL,
+    embedding vector NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_curriculum_topics_course_stage_order ON curriculum_topics(course, active, stage, order_index);
@@ -242,6 +255,8 @@ CREATE INDEX IF NOT EXISTS idx_bank_filters ON question_bank_items(primary_cours
 CREATE INDEX IF NOT EXISTS idx_exposure_student_family ON content_exposures(student_id, family_id, kind);
 CREATE INDEX IF NOT EXISTS idx_documents_course ON documents(course);
 CREATE INDEX IF NOT EXISTS idx_documents_updated_at ON documents(updated_at);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_course ON document_chunks(course);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_document_id ON document_chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_student_sessions_token_hash ON student_sessions(token_hash);
 
 CREATE OR REPLACE FUNCTION enforce_registered_course() RETURNS trigger AS $$

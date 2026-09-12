@@ -27,7 +27,7 @@ def connect():
 
 def files():
     return {str(p.relative_to(DATA)):hashlib.sha256(p.read_bytes()).hexdigest()
-        for folder in ('uploads','chroma') for p in (DATA/folder).rglob('*') if p.is_file()}
+        for p in (DATA/'uploads').rglob('*') if p.is_file()}
 
 def capture():
     AUDIT.mkdir(parents=True,exist_ok=True)
@@ -58,7 +58,7 @@ def compare():
         foreign=len(c.execute('PRAGMA foreign_key_check').fetchall())
     after_files=files()
     unchanged=all(after_files.get(p)==h for p,h in before['files'].items())
-    output={'integrity_check':integrity,'foreign_key_violations':foreign,'tables':result,'original_uploads_chroma_unchanged':unchanged}
+    output={'integrity_check':integrity,'foreign_key_violations':foreign,'tables':result,'original_uploads_unchanged':unchanged}
     (AUDIT/'after.json').write_text(json.dumps(output,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps(output,ensure_ascii=False))
     return 0 if integrity=='ok' and foreign==0 and unchanged and all(r['all_original_rows_unchanged'] for r in result.values()) else 1

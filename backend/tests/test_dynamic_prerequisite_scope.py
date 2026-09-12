@@ -1,6 +1,6 @@
 """Dynamic prerequisite generation preserves canonical, tagged retrieval scope.
 
-These tests use actual temporary SQLite/Chroma and the normal grounding/retriever
+These tests use the normal grounding and retriever contracts.
 adapter. Only embedding and model calls are replaced; production data is unused.
 """
 from __future__ import annotations

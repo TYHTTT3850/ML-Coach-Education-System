@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import logging
 import json
+import math
 from dataclasses import dataclass
-from pathlib import Path
+from datetime import datetime, timezone
 from typing import Any
 
+from psycopg.types.json import Json
+
+from app.db.database import connect_postgres
 from app.core.exceptions import VectorStoreError
 from app.core.types import Course
 from app.rag.chunker import Chunk
@@ -23,174 +27,169 @@ class RetrievalCandidate:
     fusion_score: float = 0.0
 
 
-class ChromaVectorStore:
-    """Physically separate Chroma collections, one per registered course domain."""
+class PgVectorStore:
+    """PostgreSQL/pgvector-backed course chunk store."""
 
-    def __init__(self, path: Path, distance_metric: str = "cosine") -> None:
-        self.path = Path(path)
+    def __init__(self, database_url: str, distance_metric: str = "cosine") -> None:
+        self.database_url = database_url
         self.distance_metric = distance_metric
-        self._client: Any = None
-        self._collections: dict[Course, Any] = {}
         self.ready = False
 
     def initialize(self) -> None:
         try:
-            import chromadb
-
-            self.path.mkdir(parents=True, exist_ok=True)
-            self._client = chromadb.PersistentClient(path=str(self.path))
-            self._collections = {
-                course: self._client.get_or_create_collection(
-                    name=course.collection_name,
-                    metadata={"hnsw:space": self.distance_metric, "course": course.value},
-                    embedding_function=None,
-                )
-                for course in Course
-            }
+            with connect_postgres(self.database_url) as connection:
+                extension = connection.execute(
+                    "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
+                ).fetchone()
+                table = connection.execute("SELECT to_regclass('public.document_chunks') AS name").fetchone()
+            if extension is None or table is None or table["name"] is None:
+                raise VectorStoreError("PostgreSQL 向量库尚未初始化")
             self.ready = True
+        except VectorStoreError:
+            raise
         except Exception as exc:
             self.ready = False
-            logger.exception("初始化 Chroma 失败")
+            logger.exception("初始化 PostgreSQL 向量库失败")
             raise VectorStoreError(internal_message=str(exc)) from exc
 
-    def _collection(self, course: Course) -> Any:
-        if not self.ready or course not in self._collections:
-            raise VectorStoreError()
-        return self._collections[course]
+    @staticmethod
+    def _now() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    @staticmethod
+    def _vector_literal(embedding: list[float]) -> str:
+        if not embedding or not all(math.isfinite(float(value)) for value in embedding):
+            raise VectorStoreError("Embedding 包含无效数值")
+        return "[" + ",".join(str(float(value)) for value in embedding) + "]"
+
+    def _ensure_ready(self) -> None:
+        if not self.ready:
+            raise VectorStoreError("PostgreSQL 向量库不可用")
 
     def upsert(self, course: Course, chunks: list[Chunk], embeddings: list[list[float]]) -> None:
         if len(chunks) != len(embeddings):
-            raise VectorStoreError(
-                "向量数量与文档块数量不一致",
-                internal_message=f"{len(chunks)} chunks, {len(embeddings)} vectors",
-            )
+            raise VectorStoreError("向量数量与文档块数量不一致")
         if not chunks:
             return
+        self._ensure_ready()
+        now = self._now()
+        rows = [
+            (
+                chunk.chunk_id,
+                str(chunk.metadata["document_id"]),
+                course.value,
+                chunk.text,
+                Json(chunk.metadata),
+                self._vector_literal(embedding),
+                now,
+                now,
+            )
+            for chunk, embedding in zip(chunks, embeddings, strict=True)
+        ]
         try:
-            collection = self._collection(course)
-            for start in range(0, len(chunks), 128):
-                batch = chunks[start : start + 128]
-                collection.upsert(
-                    ids=[chunk.chunk_id for chunk in batch],
-                    documents=[chunk.text for chunk in batch],
-                    metadatas=[chunk.metadata for chunk in batch],
-                    embeddings=embeddings[start : start + len(batch)],
+            with connect_postgres(self.database_url) as connection:
+                connection.executemany(
+                    """
+                    INSERT INTO document_chunks
+                        (id, document_id, course, content, metadata, embedding, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?::vector, ?, ?)
+                    ON CONFLICT (id) DO UPDATE SET
+                        document_id = EXCLUDED.document_id, course = EXCLUDED.course,
+                        content = EXCLUDED.content, metadata = EXCLUDED.metadata,
+                        embedding = EXCLUDED.embedding, updated_at = EXCLUDED.updated_at
+                    """,
+                    rows,
                 )
-        except VectorStoreError:
-            raise
         except Exception as exc:
-            logger.exception("写入 Chroma 失败")
+            logger.exception("写入 PostgreSQL 向量失败")
             raise VectorStoreError(internal_message=str(exc)) from exc
 
-    def query(
-        self,
-        course: Course,
-        query_embedding: list[float],
-        top_k: int,
-        topic_ids: list[str] | None = None,
-    ) -> list[RetrievalCandidate]:
+    def query(self, course: Course, query_embedding: list[float], top_k: int, topic_ids: list[str] | None = None) -> list[RetrievalCandidate]:
+        self._ensure_ready()
+        if top_k < 1:
+            return []
+        operator = {"cosine": "<=>", "l2": "<->", "ip": "<#>"}[self.distance_metric]
+        where = ["course = ?"]
+        params: list[Any] = [course.value]
+        if topic_ids:
+            where.append("(" + " OR ".join("jsonb_exists(metadata, ?)" for _ in topic_ids) + ")")
+            params.extend(f"topic:{topic_id}" for topic_id in topic_ids)
+        vector = self._vector_literal(query_embedding)
         try:
-            collection = self._collection(course)
-            count = int(collection.count())
-            if count == 0:
-                return []
-            result = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=min(top_k, count),
-                include=["documents", "metadatas", "distances"],
-                **({"where": {f"topic:{topic_ids[0]}": True} if len(topic_ids) == 1 else {"$or": [{f"topic:{topic}": True} for topic in topic_ids]}} if topic_ids else {}),
-            )
-            documents = (result.get("documents") or [[]])[0]
-            metadatas = (result.get("metadatas") or [[]])[0]
-            distances = (result.get("distances") or [[]])[0]
-            candidates: list[RetrievalCandidate] = []
-            for text, metadata, distance in zip(documents, metadatas, distances, strict=False):
-                if text and metadata:
-                    candidates.append(
-                        RetrievalCandidate(
-                            text=str(text),
-                            metadata=dict(metadata),
-                            distance=float(distance),
-                        )
-                    )
-            return candidates
-        except VectorStoreError:
-            raise
+            with connect_postgres(self.database_url) as connection:
+                rows = connection.execute(
+                    f"SELECT content, metadata, embedding {operator} ?::vector AS distance "
+                    f"FROM document_chunks WHERE {' AND '.join(where)} "
+                    f"ORDER BY embedding {operator} ?::vector LIMIT ?",
+                    [vector, *params, vector, top_k],
+                ).fetchall()
+            return [
+                RetrievalCandidate(text=str(row["content"]), metadata=dict(row["metadata"]), distance=float(row["distance"]))
+                for row in rows
+            ]
         except Exception as exc:
-            logger.exception("查询 Chroma 失败")
+            logger.exception("查询 PostgreSQL 向量失败")
+            raise VectorStoreError(internal_message=str(exc)) from exc
+
+    def list_chunks(self, course: Course) -> list[RetrievalCandidate]:
+        self._ensure_ready()
+        try:
+            with connect_postgres(self.database_url) as connection:
+                rows = connection.execute(
+                    "SELECT id, content, metadata FROM document_chunks WHERE course = ?", (course.value,)
+                ).fetchall()
+            return [
+                RetrievalCandidate(
+                    text=str(row["content"]),
+                    metadata={**dict(row["metadata"]), "chunk_id": str(row["id"])},
+                    distance=None,
+                )
+                for row in rows
+            ]
+        except Exception as exc:
             raise VectorStoreError(internal_message=str(exc)) from exc
 
     def tag_document(self, course: Course, document_id: str, topic_ids: list[str]) -> int:
-        """Explicit metadata-only annotation; vectors and source text remain intact."""
-        collection = self._collection(course)
-        result = collection.get(where={"document_id": document_id}, include=["metadatas"])
-        ids = list(result.get("ids") or [])
-        metadatas = []
-        for original in result.get("metadatas") or []:
-            metadata = dict(original or {})
-            for key in list(metadata):
-                if key.startswith("topic:"):
-                    metadata[key] = False
-            metadata.update({"topic_ids": json.dumps(topic_ids), "topic_id": topic_ids[0] if topic_ids else ""})
-            metadata.update({f"topic:{topic}": True for topic in topic_ids})
-            metadatas.append(metadata)
-        if ids:
-            collection.update(ids=ids, metadatas=metadatas)
-        return len(ids)
-
-    def list_chunks(self, course: Course) -> list[RetrievalCandidate]:
-        """Return every stored chunk for course-scoped lexical retrieval."""
+        self._ensure_ready()
         try:
-            collection = self._collection(course)
-            if int(collection.count()) == 0:
-                return []
-            result = collection.get(include=["documents", "metadatas"])
-            ids = list(result.get("ids") or [])
-            documents = list(result.get("documents") or [])
-            metadatas = list(result.get("metadatas") or [])
-            candidates: list[RetrievalCandidate] = []
-            for chunk_id, text, metadata in zip(
-                ids,
-                documents,
-                metadatas,
-                strict=False,
-            ):
-                if not text or not metadata:
-                    continue
-                normalized_metadata = dict(metadata)
-                normalized_metadata.setdefault("chunk_id", str(chunk_id))
-                candidates.append(
-                    RetrievalCandidate(
-                        text=str(text),
-                        metadata=normalized_metadata,
-                        distance=None,
-                    )
-                )
-            return candidates
-        except VectorStoreError:
-            raise
+            with connect_postgres(self.database_url) as connection:
+                rows = connection.execute(
+                    "SELECT id, metadata FROM document_chunks WHERE course = ? AND document_id = ?",
+                    (course.value, document_id),
+                ).fetchall()
+                updates = []
+                for row in rows:
+                    metadata = dict(row["metadata"])
+                    for key in [key for key in metadata if key.startswith("topic:")]:
+                        metadata[key] = False
+                    metadata.update({"topic_ids": json.dumps(topic_ids), "topic_id": topic_ids[0] if topic_ids else ""})
+                    metadata.update({f"topic:{topic_id}": True for topic_id in topic_ids})
+                    updates.append((Json(metadata), str(row["id"])))
+                if updates:
+                    connection.executemany("UPDATE document_chunks SET metadata = ?, updated_at = ? WHERE id = ?", [(metadata, self._now(), chunk_id) for metadata, chunk_id in updates])
+            return len(rows)
         except Exception as exc:
-            logger.exception("读取 Chroma 文档块失败")
             raise VectorStoreError(internal_message=str(exc)) from exc
 
     def delete_document(self, course: Course, document_id: str) -> int:
+        self._ensure_ready()
         try:
-            collection = self._collection(course)
-            existing = collection.get(where={"document_id": document_id}, include=[])
-            ids = list(existing.get("ids") or [])
-            if ids:
-                collection.delete(ids=ids)
-            return len(ids)
-        except VectorStoreError:
-            raise
+            with connect_postgres(self.database_url) as connection:
+                cursor = connection.execute(
+                    "DELETE FROM document_chunks WHERE course = ? AND document_id = ?",
+                    (course.value, document_id),
+                )
+            return cursor.rowcount
         except Exception as exc:
-            logger.exception("删除 Chroma 文档块失败")
             raise VectorStoreError(internal_message=str(exc)) from exc
 
     def count(self, course: Course) -> int:
+        self._ensure_ready()
         try:
-            return int(self._collection(course).count())
-        except VectorStoreError:
-            raise
+            with connect_postgres(self.database_url) as connection:
+                row = connection.execute(
+                    "SELECT COUNT(*) AS count FROM document_chunks WHERE course = ?", (course.value,)
+                ).fetchone()
+            return int(row["count"])
         except Exception as exc:
             raise VectorStoreError(internal_message=str(exc)) from exc

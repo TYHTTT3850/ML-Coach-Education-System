@@ -8,7 +8,7 @@ from difflib import SequenceMatcher
 from app.core.types import Course
 from app.core.exceptions import EmbeddingServiceError
 from app.rag.bm25 import BM25Index, tokenize
-from app.rag.vector_store import ChromaVectorStore, RetrievalCandidate
+from app.rag.vector_store import PgVectorStore, RetrievalCandidate
 from app.services.embedding.base import EmbeddingClient
 
 
@@ -21,7 +21,7 @@ class Retriever:
 
     def __init__(
         self,
-        vector_store: ChromaVectorStore,
+        vector_store: PgVectorStore,
         embedding_client: EmbeddingClient,
         *,
         top_k: int = 6,
@@ -122,7 +122,7 @@ class Retriever:
 
         An explicit distance threshold applies to the vector branch, while a
         positive BM25 match remains independent lexical evidence. Without a
-        threshold, a conservative lexical policy avoids treating Chroma's
+        threshold, a conservative lexical policy avoids treating the nearest
         nearest item as relevant merely because the collection is non-empty.
         """
         if not candidates:
@@ -309,7 +309,7 @@ class Retriever:
         return set(tokenize(text))
 
     def _passes_threshold(self, distance: float) -> bool:
-        # Chroma exposes distance (smaller is more similar) for cosine, L2 and IP spaces.
+        # pgvector exposes distance (smaller is more similar) for cosine, L2 and IP spaces.
         # Keeping this policy here avoids scattering metric assumptions through the app.
         return self.distance_threshold is None or distance <= self.distance_threshold
 

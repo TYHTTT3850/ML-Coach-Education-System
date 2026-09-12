@@ -35,10 +35,9 @@ class Settings(BaseSettings):
 
     embedding_dimension: int | None = Field(default=None, ge=1)
 
-    chroma_path: Path = Path("./data/chroma")
     database_url: str = "postgresql://postgres:postgres@localhost:5432/ml_coach"
     upload_path: Path = Path("./data/uploads")
-    chroma_distance_metric: Literal["cosine", "l2", "ip"] = "cosine"
+    vector_distance_metric: Literal["cosine", "l2", "ip"] = "cosine"
 
     rag_top_k: int = Field(default=6, ge=1, le=50)
     rag_strict_mode: bool = True
@@ -88,7 +87,7 @@ class Settings(BaseSettings):
             "change-this-admin-token",
         }:
             raise ValueError("生产环境必须配置安全的 ADMIN_TOKEN")
-        for field_name in ("chroma_path", "upload_path"):
+        for field_name in ("upload_path",):
             value = getattr(self, field_name)
             if not value.is_absolute():
                 setattr(self, field_name, (BACKEND_ROOT / value).resolve())
@@ -99,7 +98,6 @@ class Settings(BaseSettings):
         return [item.strip() for item in self.frontend_origin.split(",") if item.strip()]
 
     def ensure_data_directories(self) -> None:
-        self.chroma_path.mkdir(parents=True, exist_ok=True)
         self.upload_path.mkdir(parents=True, exist_ok=True)
 
 

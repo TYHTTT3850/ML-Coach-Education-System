@@ -253,7 +253,6 @@ def test_complete_learning_loop_for_both_courses_and_persist_after_restart(
         _env_file=None,
         app_env="test",
         sqlite_path=tmp_path / "learning-e2e.db",
-        chroma_path=tmp_path / "chroma",
         upload_path=tmp_path / "uploads",
         admin_token="test-admin-token",
         embedding_provider="local",
