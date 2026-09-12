@@ -2,19 +2,14 @@
 
 ## 环境变量
 
-复制 `backend/.env.example` 为 `backend/.env.local`，至少配置模型服务：
+复制 `backend/.env.example` 为 `backend/.env.local`，配置数据库和前端来源：
 
 ```env
-LLM_BASE_URL=https://your-llm-provider.example/v1
-LLM_API_KEY=your-llm-api-key
-LLM_MODEL=your-chat-model
-
-EMBEDDING_BASE_URL=https://your-embedding-provider.example/v1
-EMBEDDING_API_KEY=your-embedding-api-key
-EMBEDDING_MODEL=your-embedding-model
-
 # PostgreSQL 连接串示例
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/ml_coach
+
+# 前端地址，默认即可用于本地开发
+FRONTEND_ORIGIN=http://localhost:3000
 ```
 
 复制 `frontend/.env.example` 为 `frontend/.env.local`，配置：
@@ -24,6 +19,8 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
 
 如果前后端不在同一台机器或端口，需要同步修改后端的 `FRONTEND_ORIGIN` 和前端的 `NEXT_PUBLIC_API_BASE_URL` 。
+
+启动前端后，打开“设置”页，选择对话模型和 Embedding 模型厂商，并填写各自的 API Key；密钥仅保存于当前浏览器的本地存储，并会随请求发送给后端。自定义兼容服务时，也在该页面填写对应的 API Base URL。
 
 ## 运维初始化
 
