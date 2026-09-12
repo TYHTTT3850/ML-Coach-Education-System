@@ -85,7 +85,6 @@ npm run build
 ML-Coach-Education-System/
 ├── README.md                         # 项目说明、安装和启动文档
 ├── AI赋能教育_ML-Coach_Agent方案.md    # 产品方案、系统设计和 Agent 思路
-├── 机器学习方法/                       # 机器学习课程原始 Markdown 教材
 ├── operations/                         # 一次性初始化与运维脚本
 │   └── database/                       # PostgreSQL 初始化工具
 │       ├── initialize.py               # 数据库初始化入口
@@ -113,11 +112,6 @@ ML-Coach-Education-System/
 
 - `README.md`：项目结构、环境配置、启动方式和测试命令。
 - `AI赋能教育_ML-Coach_Agent方案.md`：系统定位、功能规划和智能辅导 Agent 方案。
-- `机器学习方法/00-目录与前言.md`：机器学习教材目录和前言。
-- `机器学习方法/机器学习方法-MOC.md`：课程内容的知识地图和导航入口。
-- `机器学习方法/篇/`：按篇组织的课程目录文件。
-- `机器学习方法/chapters/`：具体章节教材，从感知机、决策树、支持向量机到神经网络、预训练语言模型等。
-- `机器学习方法/images/`：教材中引用的图片资源。
 - `operations/`：项目初始化、升级和其他非运行时运维脚本。
 
 ## 后端目录和文件
