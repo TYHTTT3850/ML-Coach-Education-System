@@ -1,11 +1,5 @@
 import Link from "next/link";
-import {
-  ArrowRightIcon,
-  BrainIcon,
-  ChartIcon,
-  SparklesIcon,
-  TargetIcon,
-} from "@/components/Icons";
+import { ArrowRightIcon } from "@/components/Icons";
 import ModelSelector from "@/components/ModelSelector";
 import { COURSE_META, COURSES, type Course } from "@/lib/types";
 
@@ -26,28 +20,21 @@ const COURSE_DETAILS: Record<Course, { stages: string; cue: string; gradient: st
   probability_statistics: { stages: "数学准备", cue: "从条件概率、期望与方差到似然", gradient: "from-amber-600 to-orange-600", ring: "group-hover:border-amber-300" },
 };
 
-const LOOP_STEPS = [
-  { icon: SparklesIcon, title: "针对性讲解", text: "围绕当前知识点与课程资料学习" },
-  { icon: TargetIcon, title: "主动练习", text: "用多种题型检验真实理解" },
-  { icon: ChartIcon, title: "持续评价", text: "记录掌握度、薄弱维度和下一步" },
-];
-
 export default function LearnHomePage() {
   return (
     <div className="app-grid-bg min-h-[calc(100svh-65px)]">
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
-        <section className="max-w-3xl">
-          <span className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
-            <BrainIcon className="size-3.5" />
-            Course Content & Assessment MVP
-          </span>
-          <h1 className="mt-5 text-balance text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-            从“听懂了”走到“真正掌握”
-          </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-            选择一门课程，系统会依据前置关系引导你讲解、练习、评价和补救。每一次有效作答都会形成学习证据，并给出清晰的下一步。
-          </p>
-          <div className="mt-5">
+        <section className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <h1 className="text-balance text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+              从“听懂了”走到“真正掌握”
+            </h1>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+              选择一门课程，系统会依据前置关系引导你讲解、练习、评价和补救。每一次有效作答都会形成学习证据，并给出清晰的下一步。
+            </p>
+          </div>
+          <div className="w-full border-2 border-indigo-200 bg-indigo-50/80 p-4 shadow-sm lg:w-auto lg:min-w-80">
+            <p className="mb-2 text-xs font-bold text-indigo-800">模型设置</p>
             <ModelSelector feature="learning" label="课程学习模型" />
           </div>
         </section>
@@ -81,32 +68,6 @@ export default function LearnHomePage() {
           })}
         </section>
 
-        <section className="mt-10 rounded-3xl border border-slate-200 bg-white/85 p-6 shadow-sm backdrop-blur sm:p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-sm">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">学习闭环</p>
-              <h2 className="mt-2 text-xl font-bold text-slate-900">每一步都有依据，也有反馈</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-500">未开始的知识点会显示“尚未评估”，不会把初始先验误当成掌握度。</p>
-            </div>
-            <div className="grid flex-1 gap-3 sm:grid-cols-3 lg:max-w-3xl">
-              {LOOP_STEPS.map((step, index) => {
-                const Icon = step.icon;
-                return (
-                  <div key={step.title} className="rounded-2xl bg-slate-50 p-4">
-                    <div className="flex items-center gap-3">
-                      <span className="grid size-8 place-items-center rounded-xl bg-white text-indigo-600 shadow-sm">
-                        <Icon className="size-4" />
-                      </span>
-                      <span className="text-[10px] font-bold tabular-nums text-slate-300">0{index + 1}</span>
-                    </div>
-                    <h3 className="mt-3 text-sm font-semibold text-slate-800">{step.title}</h3>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">{step.text}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
       </div>
     </div>
   );
