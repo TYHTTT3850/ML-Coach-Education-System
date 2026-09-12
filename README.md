@@ -43,16 +43,17 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 ## 数据备份与迁移
 
-代码包不包含 PostgreSQL 中的学生、题库、学习记录、上传文档元数据和 Embedding 向量。需要交付现有数据时，安装 PostgreSQL 客户端工具，并在源端导出：
+代码包不包含 PostgreSQL 中的学生、题库、学习记录、上传文档元数据和 Embedding 向量。需要交付现有数据时，安装 PostgreSQL 客户端工具，并在源端导出，例如：
 
 ```powershell
 $env:DATABASE_URL = "postgresql://user:password@host:5432/ml_coach"
 .\operations\database\backup.ps1 -OutputPath .\ml-coach.backup
 ```
 
-在接收方创建空的 PostgreSQL 数据库、安装匹配版本的 `pgvector` 后，使用同样方式设置目标 `DATABASE_URL`，再恢复备份：
+在接收方创建空的 PostgreSQL 数据库、安装匹配版本的 `pgvector` 后，使用同样方式设置目标 `DATABASE_URL`，再恢复备份，例如：
 
 ```powershell
+$env:DATABASE_URL = "postgresql://user:password@host:5432/ml_coach"
 .\operations\database\restore.ps1 -BackupPath .\ml-coach.backup
 ```
 
